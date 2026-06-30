@@ -1,0 +1,297 @@
+<p align="center">
+  <img src="assets/hero.png" alt="Instagram marketing skills for Claude Code and Codex, open source MIT licensed" width="900" />
+</p>
+
+# Instagram Marketing Skills for Claude Code and Codex
+
+<p align="center">
+  <img src="https://img.shields.io/github/v/release/sergebulaev/instagram-skills?color=111827&label=release" alt="Latest release">
+  <img src="https://img.shields.io/badge/Claude_Code-Compatible-D97757?logo=anthropic&logoColor=white" alt="Claude Code Compatible">
+  <img src="https://img.shields.io/badge/Codex-Compatible-111827" alt="Codex Compatible">
+  <img src="https://img.shields.io/badge/Claude-Skills-8A63D2" alt="Claude Skills">
+  <img src="https://img.shields.io/badge/License-MIT-22C55E.svg" alt="MIT License">
+  <img src="https://img.shields.io/github/stars/sergebulaev/instagram-skills?style=social" alt="GitHub stars">
+  <img src="https://img.shields.io/badge/PRs-welcome-F59E0B.svg" alt="PRs Welcome">
+</p>
+
+6 skills that help Claude Code and Codex write captions, plan carousels, size hashtags, and plan a week of Instagram content in your voice. They draft the words, strip AI tells, and wait for your approval before anything gets published. Instagram needs media on every post, so the skills write the caption and you supply the image or video. No coding required.
+
+## Install
+
+Pick whichever way you use Claude Code or Codex:
+
+### Codex CLI
+
+```bash
+codex plugin marketplace add sergebulaev/instagram-skills
+codex plugin add instagram-skills@instagram-skills
+```
+
+To test a local clone before publishing changes:
+
+```bash
+git clone https://github.com/sergebulaev/instagram-skills.git
+cd instagram-skills
+codex plugin marketplace add .
+codex plugin add instagram-skills@instagram-skills
+```
+
+### claude.ai (web)
+
+1. Open https://claude.ai/code
+2. Go to **Skills** in the sidebar
+3. Click **Add from GitHub**
+4. Paste: `sergebulaev/instagram-skills`
+5. Done. The skills activate automatically when you ask about Instagram.
+
+### Claude Desktop (Mac / Windows)
+
+1. Open Claude Desktop
+2. Open **Settings** (gear icon)
+3. Go to **Skills**
+4. Click **Add from GitHub**
+5. Paste: `sergebulaev/instagram-skills`
+6. Done. Start a new conversation and ask Claude to write a caption.
+
+### Claude Code (CLI / VS Code / JetBrains)
+
+```
+/plugin marketplace add sergebulaev/instagram-skills
+/plugin install instagram-skills@instagram-skills
+```
+
+Or clone the repo and open it as your working directory:
+
+```bash
+git clone https://github.com/sergebulaev/instagram-skills.git
+cd instagram-skills
+```
+
+## What you can do
+
+Once installed, just ask Claude Code or Codex for help with Instagram. The right skill activates automatically.
+
+**Write a caption:**
+> "Write me an Instagram caption about how I cut my editing time from 6 hours to 47 minutes. Hook in the first line."
+
+**Plan a carousel:**
+> "Turn my notes into a 10-slide carousel on portfolio mistakes for junior designers."
+
+**Reverse-engineer a viral Reel:**
+> "What hook does this Reel use? https://www.instagram.com/reel/C9_aBcDeF/ (I'll paste the first 3 seconds)"
+
+**Size your hashtags:**
+> "Give me 5 hashtags for this post, sized so my 2k account can actually rank."
+
+**Check a draft before posting:**
+> "Audit this caption for AI tells and the first-125-char hook: [paste your text]"
+
+**Plan your week:**
+> "Plan a week of Instagram content. I'm launching a design course for junior designers."
+
+Every skill shows you a draft first and waits for your OK. Nothing gets posted without your approval.
+
+## The 6 skills
+
+| Skill | What it does |
+|---|---|
+| **Caption Writer** | Drafts a caption with the hook in the first 125 chars, a skimmable body, and one CTA, using a 2026 hook formula picked by goal: saves, shares, comments, or follows |
+| **Carousel Planner** | Plans a carousel slide by slide (up to 10): a hook slide that opens a loop, value slides front-loaded, and a payoff slide that earns the save and the follow |
+| **Hook Extractor** | Reverse-engineers the hook from any viral Reel or carousel. Maps it to one of the 10 Instagram formulas and returns a blank template you can fill |
+| **Hashtag Strategist** | Builds a sized 3-5 hashtag set (niche / mid / broad) you can actually rank in, matched to the post. The 2026 reality, not the 30-tag wall |
+| **Humanizer** | Strips em dashes, AI vocabulary ("leverage", "delve", "elevate"), rule-of-three lists, and emoji storms. Bundles a `--mode audit` pre-publish check |
+| **Content Planner** | Creates a weekly plan with a Reels / carousel / story mix, per-day hooks, posting times, a saves-and-shares goal, and a goal-mix balance check |
+
+## Media is required on every Instagram post
+
+Instagram does not allow text-only posts. The skills write the caption, hook, hashtags, and slide or shot plan. **You supply the image or video.** When you connect Publora and point a skill at your media files, it runs the publish flow for you:
+
+```
+1. create a draft (no scheduled time)   -> postGroupId
+2. upload each file to S3                (2-10 images for a carousel, in order)
+3. schedule the post                     (status=scheduled + time)
+```
+
+That exact order matters: scheduling before the upload finishes races Instagram's scheduler against the media. The bundle's `lib/publora_client.publish_media_post(...)` does all three steps in one call.
+
+## Optional: auto-post with Publora
+
+By default, the skills draft the caption for you to post in the Instagram app with your own media. If you want Claude Code or Codex to upload your media and schedule the post directly, connect Publora. It takes about 2 minutes.
+
+### What is Publora?
+
+[Publora](https://publora.com) is a publishing API that handles the Instagram media flow (draft, upload, schedule) in one call, and can cross-post the same content to other networks.
+
+### Setup (2 minutes)
+
+**Step 1.** Sign up at https://app.publora.com/signup (free)
+
+**Step 2.** Connect Instagram: click **Channels** in the left sidebar, then **Add Channel**, pick **Instagram**, authorize. You need a **Business or Creator** account (personal accounts are not supported).
+
+**Step 3.** Find your Platform ID: go to **Channels**, click your Instagram account. The ID looks like `instagram-11223344`. Copy the whole thing including `instagram-`.
+
+**Step 4.** Get your API key: click **Settings** (gear icon, bottom-left), then **API**, then **Create Key**. Copy the `sk_...` string.
+
+**Step 5.** Create a file called `.env` in the instagram-skills folder:
+
+```
+PUBLORA_API_KEY=sk_paste_your_key_here
+INSTAGRAM_PLATFORM_ID=instagram-paste_your_id_here
+```
+
+If you cloned the repo, copy the template instead:
+
+```bash
+cp .env.example .env
+```
+
+Then open `.env` and replace the placeholders with your real values.
+
+**Step 6.** Install two small Python packages:
+
+```bash
+pip install requests python-dotenv
+```
+
+**Step 7.** Test it. Ask Claude Code or Codex:
+
+> "Schedule a test Instagram post via Publora 24 hours from now with this image: [path]. Caption: 'testing the API connection, will cancel in dashboard'."
+
+If Publora returns a `postGroupId`, you're set. Cancel the post in the Publora dashboard before the scheduled time. If you get HTTP 401, your API key is wrong. If you get an `Invalid platform ID format` error, your `INSTAGRAM_PLATFORM_ID` is wrong. See [Troubleshooting](#troubleshooting).
+
+> **Note on media:** Instagram rejects text-only posts. If you do not point a skill at an image or video, it returns the caption as a copy-paste block plus a reminder to attach your media in the app.
+
+## Voice rules
+
+Every skill follows these rules automatically:
+
+1. No em dashes. Biggest AI tell in 2026.
+2. Capitalize names. Always. Lowercase a brand reads as careless.
+3. No AI vocabulary: "leverage", "fundamentally", "streamline", "harness", "delve", "elevate", "dive in".
+4. Specific numbers beat adjectives. "47 minutes" beats "fast".
+5. The hook lives in the first 125 chars (everything after is behind the "more" fold).
+6. Hashtags are sizing, not volume: 3-5 sized tags, not 30. 0-3 emoji.
+
+## Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| Skills don't activate when I ask about Instagram | Make sure you installed via the Skills panel, `/plugin install`, or `codex plugin add`. Try a new conversation. |
+| "PUBLORA_API_KEY not set" | Your `.env` file is missing or in the wrong folder. It should be in the `instagram-skills/` root. |
+| "401 Invalid API key" from Publora | Your API key is wrong or revoked. Go to Publora Settings > API > Create a new key. |
+| "Invalid platform ID format" | Your `INSTAGRAM_PLATFORM_ID` is wrong. Go to Publora Channels and copy the full `instagram-...` string. |
+| My post failed with "media required" | Instagram does not allow text-only posts. Point the skill at an image or video file. |
+| My carousel was rejected | A carousel is 2-10 items, all images or all video. You cannot mix images and a video in one carousel. |
+| Personal account won't connect | Instagram's API needs a Business or Creator account. Switch in the Instagram app settings, then reconnect. |
+| `pip install` fails | Use a virtual environment: `python -m venv venv && source venv/bin/activate && pip install requests python-dotenv` |
+
+## Cross-cutting references
+
+- [`references/hook-formulas.md`](references/hook-formulas.md) - the 10 Instagram hook formulas with skeletons and goal tags
+- [`references/algorithm-heuristics.md`](references/algorithm-heuristics.md) - 2026 Instagram ranking signals, timing, and limits
+- [`references/hashtag-strategy.md`](references/hashtag-strategy.md) - the 2026 sized-hashtag model (3-5, not 30)
+- [`references/media-workflow.md`](references/media-workflow.md) - the draft, upload, schedule media flow
+- [`references/voice-rules.md`](references/voice-rules.md) - the canonical voice rules every skill inherits
+
+---
+
+<details>
+<summary><b>For developers: runtime compatibility, URL parsing, and internals</b></summary>
+
+## Runtime compatibility
+
+```
+instagram-skills/
+  skills/             SKILL.md frontmatter; native to Claude Code and Codex, others read as markdown
+  .codex-marketplace/ generated nested Codex package (run scripts/sync_codex_marketplace.py)
+  lib/                pure Python, works in any agent runtime
+  references/         pure markdown, works anywhere
+  scripts/            pure Python CLI, works anywhere
+```
+
+| Runtime | Auto-discovers skills? | Setup |
+|---|---|---|
+| **Claude Code** (CLI, Desktop, Web, IDE) | Yes | Install via plugin or clone. Skills activate on matching prompts. |
+| **Codex CLI** | Yes | `codex plugin marketplace add sergebulaev/instagram-skills` and `codex plugin add instagram-skills@instagram-skills`. |
+| **Anthropic Managed Agents** (`/v1/agents`) | Yes | Pass skill files in the agent context. |
+| **Cursor / Cline / Aider** | Manual | Read `SKILL.md` files as prompt context; import `lib/` as Python. |
+| **LangChain / AutoGen** | No | Use `lib/` as a package; feed `references/` as prompt context. |
+
+## Generic Python agent quickstart
+
+```python
+import sys; sys.path.insert(0, "path/to/instagram-skills")
+from lib import parse_instagram_url, PubloraClient, publish
+
+parsed = parse_instagram_url("https://www.instagram.com/reel/C9_aBcDeF/")
+print(parsed["url_type"], parsed["shortcode"])  # reel C9_aBcDeF
+
+# Write side (Publora) - the full Instagram media flow in one call
+client = PubloraClient()  # reads PUBLORA_API_KEY from env
+client.publish_media_post(
+    content="the 3-step setup is below, steal it\n\n#niche #mid #broad",
+    platforms=["instagram-11223344"],
+    media=["slide1.jpg", "slide2.jpg", "slide3.jpg"],  # local paths, in order
+    scheduled_time="2026-07-01T15:00:00.000Z",
+)
+
+# Or use the high-level wrapper that handles manual / Publora / diy routing
+publish("carousel", draft_text="...", target_url="https://www.instagram.com/",
+        media=["slide1.jpg", "slide2.jpg"], platforms=["instagram-11223344"])
+```
+
+## URL handling
+
+`lib/url_parser.py` parses Instagram post, Reel, and profile URLs:
+
+| URL fragment | Parsed |
+|---|---|
+| `instagram.com/p/SHORTCODE/` | `{shortcode, url_type: "post"}` |
+| `instagram.com/reel/SHORTCODE/` | `{shortcode, url_type: "reel"}` |
+| `instagram.com/USERNAME/` | `{username, url_type: "profile"}` |
+| `instagram.com/stories/USER/ID/` | `{username, shortcode, url_type: "story"}` |
+
+```bash
+python lib/url_parser.py "https://www.instagram.com/p/C8xYz12abcd/"
+```
+
+## Why the publish flow is three steps
+
+Instagram requires media, and uploading media to a pre-signed S3 URL is
+asynchronous. If you create a post with a scheduled time set up front, the
+scheduler can fire before the upload finishes, producing a failed or media-less
+post. So the flow is always: create a draft, upload the media, then set the
+schedule. `publish_media_post` enforces that order and cleans up the draft if any
+step fails.
+
+## Why there is no read layer by default
+
+Instagram has no cheap, documented post-read actor wired into this bundle, so
+`ig-hook-extractor` asks the user to paste the caption (and slide or Reel hook).
+If you add an Apify Instagram actor later, gate it behind `APIFY_TOKEN` and keep
+the paste fallback.
+
+</details>
+
+## References
+
+- [Publora API docs](https://docs.publora.com) - endpoint reference for the publishing layer
+- [Instagram Graph API content publishing](https://developers.facebook.com/docs/instagram-api/guides/content-publishing) - the platform API the publish layer builds on
+
+## License
+
+MIT. Powered by [Publora](https://publora.com).
+
+## Related open-source skill bundles
+
+Part of a family of AI social-media marketing skill bundles for Claude Code and Codex:
+
+- [linkedin-skills](https://github.com/sergebulaev/linkedin-skills) - LinkedIn
+- [x-skills](https://github.com/sergebulaev/x-skills) - X (Twitter)
+- **instagram-skills - Instagram (this repo)**
+- [youtube-skills](https://github.com/sergebulaev/youtube-skills) - YouTube
+- [threads-skills](https://github.com/sergebulaev/threads-skills) - Threads
+- [tiktok-skills](https://github.com/sergebulaev/tiktok-skills) - TikTok
+- [facebook-skills](https://github.com/sergebulaev/facebook-skills) - Facebook Pages
+
+Also: [Anthropic Skills repo](https://github.com/anthropics/skills), the `awesome-claude-skills` directory.
