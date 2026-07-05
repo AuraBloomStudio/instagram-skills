@@ -5,6 +5,14 @@ the API rejects it. So the writer skills in this bundle produce the **caption,
 hook, hashtags, and slide or shot plan**, and the **user supplies the image or
 video file**. Publishing is always a media flow.
 
+## Contents
+
+- The flow (Publora tier)
+- Container rules (what the media list becomes)
+- Media limits (publish-time)
+- Manual tier (no Publora)
+- Cleaning up a failed upload
+
 ## The flow (Publora tier)
 
 Instagram publishing is a three-step flow. Creating a post with a `scheduledTime`

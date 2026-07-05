@@ -6,6 +6,20 @@ marked "reported" are community-measured, not officially confirmed. Instagram
 ranks each surface (Feed, Reels, Explore, Stories) with its own model, but the
 signals below generalize.
 
+## Contents
+
+- Signal weights (relative reach impact)
+- The first 30-60 minutes
+- Reach suppressors (avoid)
+- Reach amplifiers
+- Format and media limits (via the publishing API)
+- Carousels
+- Reels
+- Stories
+- Timing
+- Saves and sends are the underrated levers
+- Pre-publish checklist
+
 ## Signal weights (relative reach impact)
 
 Instagram scores predicted engagement, and the engagement types are not equal.

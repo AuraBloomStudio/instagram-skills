@@ -29,6 +29,23 @@ shares are the underrated levers; design for them deliberately.
 > No em dashes anywhere in the fill-in slots below. They would leak straight into
 > the generated caption and read as an AI tell.
 
+## Contents
+
+- IG1 - Number-First Result (caption)
+- IG2 - Contrarian Truth (caption)
+- IG3 - Relatable Cold-Open (caption)
+- IG4 - Mini-Story Confession (caption)
+- IG5 - Listicle Carousel (carousel)
+- IG6 - Before/After Transformation (carousel)
+- IG7 - Myth-Buster Carousel (carousel)
+- IG8 - Steal-This Framework (carousel)
+- IG9 - Pattern-Interrupt Reel (reel)
+- IG10 - How-I Reel Teardown (reel)
+- Engagement-goal split
+- Surface -> container: pick first
+- Hook micro-rules (Instagram-specific)
+- Never do
+
 ---
 
 ## IG1 - Number-First Result (caption)
