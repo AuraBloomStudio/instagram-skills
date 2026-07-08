@@ -67,6 +67,14 @@ git clone https://github.com/sergebulaev/instagram-skills.git
 cd instagram-skills
 ```
 
+### Any agent (skills CLI)
+
+One command that works across Claude Code, Codex, Cursor, and any other agent that reads SKILL.md files:
+
+```bash
+npx skills add sergebulaev/instagram-skills
+```
+
 ## What you can do
 
 Once installed, just ask Claude Code or Codex for help with Instagram. The right skill activates automatically.
