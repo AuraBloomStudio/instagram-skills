@@ -5,7 +5,7 @@ description: Plan, draft, audit, and publish content for Instagram. Use when the
 
 # Instagram Marketing Skills
 
-A bundle of 6 focused skills for Instagram content ops in 2026. Each skill is
+A bundle of 7 focused skills for Instagram content ops in 2026. Each skill is
 single-purpose, follows the draft then approval then publish pattern, and uses
 the [Publora API](https://publora.com) for the media-required publish flow.
 
@@ -17,6 +17,7 @@ the [Publora API](https://publora.com) for the media-required publish flow.
 - **Sizing hashtags** (the 3-5 niche/mid/broad reality, not 30) -> use `ig-hashtag-strategist`
 - **Removing AI tells from a caption, or auditing it before posting** -> use `ig-humanizer` (rewrite plus `--mode audit`, which folds in the post-audit sub-tool)
 - **Planning a week** of Reels, carousels, and stories -> use `ig-content-planner`
+- **Adapting cross-platform content** (a LinkedIn post, blog, YouTube script, or X thread) into a native Instagram carousel or caption -> use `ig-repurposer`
 
 ## Core pattern
 
