@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/PRs-welcome-F59E0B.svg" alt="PRs Welcome">
 </p>
 
-7 skills that help Claude Code and Codex write captions, plan carousels, size hashtags, repurpose cross-platform content, and plan a week of Instagram content in your voice. They draft the words, strip AI tells, and wait for your approval before anything gets published. Instagram needs media on every post, so the skills write the caption and you supply the image or video. No coding required.
+8 skills that help Claude Code and Codex write captions, plan carousels, size hashtags, repurpose cross-platform content, optimize your profile, and plan a week of Instagram content in your voice. They draft the words, strip AI tells, and wait for your approval before anything gets published. Instagram needs media on every post, so the skills write the caption and you supply the image or video. No coding required.
 
 ## Install
 
@@ -124,7 +124,7 @@ Once installed, just ask Claude Code or Codex for help with Instagram. The right
 
 Every skill shows you a draft first and waits for your OK. Nothing gets posted without your approval.
 
-## The 7 skills
+## The 8 skills
 
 | Skill | What it does |
 |---|---|
@@ -135,6 +135,7 @@ Every skill shows you a draft first and waits for your OK. Nothing gets posted w
 | **Humanizer** | Strips em dashes, AI vocabulary ("leverage", "delve", "elevate"), rule-of-three lists, and emoji storms. Bundles a `--mode audit` pre-publish check |
 | **Content Planner** | Creates a weekly plan with a Reels / carousel / story mix, per-day hooks, posting times, a saves-and-shares goal, and a goal-mix balance check |
 | **Repurposer** | Turns a LinkedIn post, blog, YouTube script, or X thread into a native Instagram carousel or caption: re-hooked before the 125-char fold, off-platform artifacts stripped, never a copy-paste |
+| **Profile Optimizer** | Audits and rewrites the profile end-to-end: photo, searchable NAME field, bio (150 chars), goal-matched link, category label, highlights (covers, order, naming), the first-9 grid, and up to 3 pinned posts, with a scorecard and before/after rewrites |
 
 ## Media is required on every Instagram post
 
