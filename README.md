@@ -14,7 +14,18 @@
   <img src="https://img.shields.io/badge/PRs-welcome-F59E0B.svg" alt="PRs Welcome">
 </p>
 
-9 skills that help Claude Code and Codex write captions, plan carousels, size hashtags, repurpose cross-platform content, optimize your profile, read your niche from real data, and plan a week of Instagram content in your voice. They draft the words, strip AI tells, and wait for your approval before anything gets published. Instagram needs media on every post, so the skills write the caption and you supply the image or video. No coding required.
+> **Part of the [linkedin-skills](https://github.com/sergebulaev/linkedin-skills) family (400+ stars).** Same voice engine and approve-before-publish flow, now for Instagram. Also available for [X](https://github.com/sergebulaev/x-skills) · [YouTube](https://github.com/sergebulaev/youtube-skills) · [TikTok](https://github.com/sergebulaev/tiktok-skills) · [Threads](https://github.com/sergebulaev/threads-skills) · [Facebook](https://github.com/sergebulaev/facebook-skills).
+
+**9 skills that turn Claude Code and Codex into your Instagram content team.** They write captions and Reels hooks in your voice, size hashtags, plan carousels and a full week of content, read your niche from real data, and optimize your profile. Every draft gets the AI tells stripped and waits for your approval before anything publishes. You supply the image or video; the skills write the words. No coding required.
+
+Once installed, just ask Claude Code or Codex things like:
+
+- "Write a caption for this Reel about [topic]"
+- "Plan a week of Instagram posts for my [niche]"
+- "What's working in my niche right now?" (reads real data via Apify)
+- "Rewrite this caption so it doesn't sound like AI"
+
+The right skill activates automatically. Then you review and approve.
 
 ## Install
 
