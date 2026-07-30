@@ -124,6 +124,10 @@ See `references/examples.md` for worked before/after rewrites.
 - `references/audit-checklist.md` - the pre-publish checklist with thresholds
 - `sub-skills/post-audit.md` - pre-publish audit workflow (detection-only, no rewrite)
 
+## Voice profile mode (`--mode profile`)
+
+`ig-humanizer --mode profile` builds or updates the user's Voice & Brand Profile at `../../references/voice-profile.md` from 3-6 of their real Instagram posts pasted in (portable, no token) or, if a read token is set, from pulled activity. Once filled, every writing skill in this bundle drafts in the user's voice automatically. See `sub-skills/voice-profile.md`. Triggers: "build my voice profile", "learn my voice".
+
 ## Related skills
 
 - `ig-caption-writer` - generates captions that already pass the humanizer

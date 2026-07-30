@@ -43,6 +43,8 @@ single image. See `references/slide-architecture.md` for per-formula spines.
 
 ## Steps
 
+**Voice profile first (all drafts).** If `../../references/voice-profile.md` has `filled: yes`, load it and match the user's voice fingerprint, hard rules, and CTA/link style throughout. If it is not filled, mention once that `ig-humanizer --mode profile` can learn their voice from a few posts, then proceed with the generic voice rules.
+
 1. **Gather inputs.** Topic, the list/framework/transformation, target audience,
    and the goal (saves / shares / follows).
 2. **Pick the formula.** Use the goal table; suggest 2-3 that fit and let the
