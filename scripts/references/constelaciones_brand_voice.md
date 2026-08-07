@@ -44,15 +44,25 @@ skip "Para asentar," the book CTA, and hashtags entirely; see
   - `post-constelaciones` (single image): the affirmation is the last part
     of the same on-image copy block.
   - `carrusel-constelaciones`: "Para asentar" + the affirmation is the
-    on-image text of the **last slide only** — a visual closer meant to earn
-    the save. It is never duplicated in the caption.
+    on-image text of the **second-to-last slide** — a visual closer meant to
+    earn the save. The last slide is the CTA slide (see below). It is never
+    duplicated in the caption.
+- **Bridge required before the CTA.** Naming the pain is not enough: between
+  the reframe and the link there must be an explicit sentence stating that a
+  way out exists and that Diana's book/process is that way out. Don't just
+  name the wound and then drop the link with no connective sentence. Example:
+  "Esto no se queda así: hay un camino para soltar esta carga, y en mi libro
+  te lo muestro paso a paso." Applies to both `post-constelaciones` (as a
+  sentence right before the link) and `carrusel-constelaciones` (as the text
+  of the dedicated CTA slide, see `CAROUSEL_STRUCTURES`).
 - **CTA:** one natural mention of the book *El dolor que no te pertenece*
   plus the plain URL `https://eldolorquenotepertenece.com` — no UTM
   parameters, no shortened link, no more than this one link.
   - `post-constelaciones`: CTA + link go at the end of the on-image copy
-    block, right after "Para asentar."
-  - `carrusel-constelaciones`: CTA + link go **only in the caption**, never
-    on a slide.
+    block, right after "Para asentar" and the bridge sentence.
+  - `carrusel-constelaciones`: the CTA (bridge sentence + book mention) is
+    the on-image text of the **last slide**; the plain link itself still goes
+    **only in the caption**, never on a slide.
   - If a post is about a topic the book doesn't directly cover, keep the
     same CTA anyway (it's the standing offer across this brand) unless the
     user says otherwise for that post.
@@ -101,25 +111,67 @@ names a structure, use that one instead and don't touch the rotation state.
 `carrusel-constelaciones` rotates through these, avoiding the last 2 used
 (tracked in `testing/copy_gen_state.json`, key `carousel_structure`). If the
 user names a structure, use that one instead and don't touch the rotation
-state. In every structure, the **final listed slide is the "Para asentar"
-closer slide** — never an extra slide on top of the count below.
+state.
 
-1. **Narrativo: problema → explicación → cierre.** 3 slides. Slide 1 plantea
-   el problema (funciona como hook). Slide 2 explica la causa oculta. Slide 3
-   es el cierre "Para asentar."
-2. **Lista de comportamientos en paralelo.** 4-6 slides depending on how many
-   behaviors fit the topic. Slide 1 is the hook ("Señales de que..."), each
-   middle slide names one behavior, the last slide is "Para asentar."
-3. **Antes / Después.** 2-3 slides. Slide 1 = "Antes" (el patrón viejo).
-   Slide 2 = "Después" (el reencuadre). If a 3rd slide is used, it's the
-   dedicated "Para asentar" closer; in the 2-slide version, fold the
-   affirmation into slide 2.
-4. **Preguntas de autodiagnóstico.** 5-7 slides depending on how many signs
-   fit. Slide 1 is the hook ("¿Reconoces estas señales?"), each middle slide
-   is one yes/no self-check question, the last slide is "Para asentar."
-5. **Mini-historia con giro: situación → tensión → revelación → cierre.**
-   4 slides. Slide 1 sets the situation, slide 2 the tension, slide 3 the
-   revelation (the reframe), slide 4 is "Para asentar."
+**Every structure ends with the same last two slides, on top of its own
+content count below:** second-to-last = "Para asentar" closer (the
+affirmation), last = the CTA slide (bridge sentence + book mention, see
+`CAROUSEL_STRUCTURES`'s parent rules for the exact bridge requirement). Never
+skip either, never merge them into one slide.
+
+**Minimum 6 slides, every structure, no exceptions.** A carousel that would
+otherwise land on 4 or 5 slides gets more content development instead of
+staying short -- split the middle content into more distinct beats (cause,
+how it shows up, consequence, etc.) rather than compressing the closer.
+
+**Slide-to-slide connective flow (mandatory).** Slides must read as one
+continuous story advancing, never as a list of independent, disconnected
+statements. Every slide except the first must open by picking up something
+from the slide before it, using one of these techniques:
+- **Repeat a keyword or image** from the end of the previous slide and carry
+  it forward (e.g. previous slide ends on "el puente"; this slide opens "Ese
+  puente no se queda en la infancia...").
+- **Answer the implicit question** the previous slide left open (a slide that
+  ends on tension or a claim without proof should be answered by the next).
+- **Continue the same sentence or idea naturally**, as if the reader is
+  turning a page mid-thought, not starting a new one.
+Do this for every transition, including into "Para asentar" and into the CTA
+slide -- the affirmation should echo a word or image from the body, and the
+CTA should pick up from what "Para asentar" just resolved.
+
+**Design mix (fixed, not random):** slide 1 (hook) and the last slide (CTA)
+use the flat-color "quote card" treatment from `BRAND_COLORS` in
+`image_prompt_style.md` -- no photo, no Gemini call, text is the whole
+design. Every other slide, including "Para asentar," uses a generated photo
+background. This mix repeats on every carousel; it is not optional or
+randomized per slide.
+
+1. **Narrativo: problema → causa/origen → cómo se manifiesta → consecuencia →
+   Para asentar → CTA.** 6 slides, siempre. Slide 1 plantea el problema
+   (hook, sin foto). Slide 2 explica la causa/origen oculto (foto). Slide 3
+   muestra cómo se manifiesta en el día a día (foto). Slide 4 nombra la
+   consecuencia de no verlo (foto). Slide 5 es "Para asentar" (foto).
+   Slide 6 es el CTA (sin foto).
+2. **Lista de comportamientos en paralelo.** 6-8 slides depending on how many
+   behaviors fit the topic: hook (sin foto) + 3-5 behavior slides (foto) +
+   "Para asentar" (foto) + CTA (sin foto). Mínimo 3 comportamientos para
+   llegar a 6 slides.
+3. **Antes / Después.** 6 slides, siempre (ya no hay variante corta): el
+   contraste se desarrolla en dos beats por lado en vez de uno. Slide 1 =
+   "Antes" -- cómo se ve/siente el patrón viejo (hook, sin foto). Slide 2 =
+   "Antes" -- una consecuencia concreta de ese patrón (foto). Slide 3 =
+   "Después" -- qué cambia al soltarlo (foto). Slide 4 = "Después" -- qué se
+   gana (foto). Slide 5 = "Para asentar" (foto). Slide 6 = CTA (sin foto).
+4. **Preguntas de autodiagnóstico.** 6-8 slides depending on how many signs
+   fit: hook (sin foto) + 3-5 self-check question slides (foto) + "Para
+   asentar" (foto) + CTA (sin foto). Mínimo 3 preguntas para llegar a 6
+   slides.
+5. **Mini-historia con giro: situación → tensión → punto de quiebre →
+   revelación → Para asentar → CTA.** 6 slides, siempre. Slide 1 sets the
+   situation (hook, sin foto). Slide 2 the tension building up (foto).
+   Slide 3 the specific breaking point/momento crítico (foto). Slide 4 the
+   revelation/reframe (foto). Slide 5 is "Para asentar" (foto). Slide 6 is
+   CTA (sin foto).
 
 ## STORY_STRUCTURES
 

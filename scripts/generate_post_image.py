@@ -17,6 +17,15 @@ Flow:
   5. Resize to the exact matching pixel size and save the PNG to
      Desktop/Imagenes Posts/<nombre-del-copy>.png (or wherever --out-dir points)
 
+--protagonist "<description>" carries a fixed protagonist description (e.g.
+"a woman in her 30s") into step 2, so multiple slides of one carousel depict
+the same person instead of a different generic figure each call.
+
+--flat-color <index-or-name> skips Gemini entirely (no API key needed) and
+instead renders a solid or gradient background from BRAND_COLORS in
+image_prompt_style.md -- used for "quote card" carousel slides that carry no
+photo, just text added later in Canva.
+
 The visual style (lighting, composition options, how metaphors get reinterpreted)
 lives entirely in scripts/references/image_prompt_style.md, not in this file --
 edit that reference to tune the output without touching code.
@@ -45,7 +54,7 @@ from typing import Optional
 
 import requests
 from dotenv import load_dotenv, set_key
-from PIL import Image
+from PIL import Image, ImageDraw
 
 try:
     import docx  # python-docx
@@ -151,6 +160,7 @@ def load_style_guide() -> dict:
         "archetypes": _numbered_list("COMPOSITION_ARCHETYPES"),
         "camera_angles": _numbered_list("CAMERA_ANGLES"),
         "settings": _numbered_list("SETTINGS"),
+        "brand_colors": _numbered_list("BRAND_COLORS"),
     }
 
 
@@ -252,6 +262,95 @@ def ensure_gemini_api_key() -> str:
     return api_key
 
 
+DEFAULT_PROTAGONIST_TEXT = (
+    "No specific protagonist identity is required; choose whatever generic "
+    "figure(s) best fit the composition and setting."
+)
+
+
+def _protagonist_instruction(protagonist: Optional[str]) -> str:
+    if not protagonist:
+        return DEFAULT_PROTAGONIST_TEXT
+    return (
+        f"All figures depicting the protagonist across this carousel must "
+        f"consistently read as: {protagonist}. Do not switch gender or "
+        f"general appearance between slides."
+    )
+
+
+def _hex_to_rgb(hex_str: str) -> tuple:
+    hex_str = hex_str.lstrip("#")
+    return tuple(int(hex_str[i : i + 2], 16) for i in (0, 2, 4))
+
+
+_SOLID_COLOR_RE = re.compile(
+    r"^Solido\s*--\s*(?P<name>.+?)\s*\(#(?P<hex>[0-9A-Fa-f]{6})\)$"
+)
+_GRADIENT_COLOR_RE = re.compile(
+    r"^Degradado\s*--\s*(?P<name1>.+?)\s*\(#(?P<hex1>[0-9A-Fa-f]{6})\)\s+a\s+"
+    r"(?P<name2>.+?)\s*\(#(?P<hex2>[0-9A-Fa-f]{6})\)$"
+)
+
+
+def _parse_brand_color(entry: str) -> dict:
+    match = _SOLID_COLOR_RE.match(entry)
+    if match:
+        return {"kind": "solid", "colors": [_hex_to_rgb(match.group("hex"))], "label": entry}
+    match = _GRADIENT_COLOR_RE.match(entry)
+    if match:
+        return {
+            "kind": "gradient",
+            "colors": [_hex_to_rgb(match.group("hex1")), _hex_to_rgb(match.group("hex2"))],
+            "label": entry,
+        }
+    raise GenerationError(
+        f"No se pudo interpretar la entrada de BRAND_COLORS: {entry!r}. Formato "
+        "esperado: 'Solido -- Nombre (#RRGGBB)' o "
+        "'Degradado -- Nombre1 (#RRGGBB) a Nombre2 (#RRGGBB)'."
+    )
+
+
+def select_brand_color(spec: str, brand_colors: list) -> dict:
+    """Resolve --flat-color's value (a 1-based index or a case-insensitive
+    substring of the entry name) to a parsed BRAND_COLORS entry."""
+    spec = spec.strip()
+    if spec.isdigit():
+        idx = int(spec) - 1
+        if not (0 <= idx < len(brand_colors)):
+            raise GenerationError(
+                f"--flat-color {spec} fuera de rango (BRAND_COLORS tiene "
+                f"{len(brand_colors)} entradas)."
+            )
+        return _parse_brand_color(brand_colors[idx])
+    matches = [c for c in brand_colors if spec.lower() in c.lower()]
+    if not matches:
+        raise GenerationError(
+            f"--flat-color {spec!r} no coincide con ninguna entrada de BRAND_COLORS."
+        )
+    if len(matches) > 1:
+        raise GenerationError(
+            f"--flat-color {spec!r} coincide con varias entradas de BRAND_COLORS: "
+            f"{matches}. Sé más específico o usa el número de índice."
+        )
+    return _parse_brand_color(matches[0])
+
+
+def render_flat_color_image(color: dict, size: tuple) -> "Image.Image":
+    width, height = size
+    if color["kind"] == "solid":
+        return Image.new("RGB", size, color["colors"][0])
+    top, bottom = color["colors"]
+    image = Image.new("RGB", size)
+    draw = ImageDraw.Draw(image)
+    for y in range(height):
+        t = y / max(height - 1, 1)
+        r = round(top[0] + (bottom[0] - top[0]) * t)
+        g = round(top[1] + (bottom[1] - top[1]) * t)
+        b = round(top[2] + (bottom[2] - top[2]) * t)
+        draw.line([(0, y), (width, y)], fill=(r, g, b))
+    return image
+
+
 def _extract_json_object(text: str) -> dict:
     fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
     candidate = fenced.group(1) if fenced else text
@@ -262,13 +361,20 @@ def _extract_json_object(text: str) -> dict:
 
 
 def analyze_copy(
-    copy_text: str, api_key: str, style: dict, archetype: str, camera_angle: str, setting: str
+    copy_text: str,
+    api_key: str,
+    style: dict,
+    archetype: str,
+    camera_angle: str,
+    setting: str,
+    protagonist: Optional[str] = None,
 ) -> dict:
     rules = (
         style["analysis_rules"]
         .replace("__COMPOSITION_ARCHETYPE__", archetype)
         .replace("__CAMERA_ANGLE__", camera_angle)
         .replace("__SETTING__", setting)
+        .replace("__PROTAGONIST__", _protagonist_instruction(protagonist))
     )
     prompt = (
         ANALYSIS_SYSTEM_PROMPT.replace("__ANALYSIS_RULES__", rules)
@@ -350,6 +456,22 @@ def main() -> int:
         help=f"Aspect ratio de salida (default: {DEFAULT_ASPECT_RATIO}). "
         "9:16 para Stories, 1:1 para cuadrado.",
     )
+    parser.add_argument(
+        "--protagonist",
+        default=None,
+        help="Descripción fija del protagonista (ej. 'a woman in her 30s'), "
+        "para mantener a la misma persona consistente entre varias slides de "
+        "un mismo carrusel. Sin esta opción, cada llamada elige libremente.",
+    )
+    parser.add_argument(
+        "--flat-color",
+        default=None,
+        metavar="INDICE_O_NOMBRE",
+        help="Salta Gemini por completo (gratis, instantáneo) y genera un "
+        "fondo sólido o degradado a partir de BRAND_COLORS en "
+        "image_prompt_style.md -- índice numérico (1, 2, ...) o texto "
+        "parcial del nombre. Para slides tipo 'quote card' sin foto.",
+    )
     args = parser.parse_args()
 
     copy_path = Path(args.copy_file)
@@ -366,6 +488,15 @@ def main() -> int:
 
     try:
         style = load_style_guide()
+
+        if args.flat_color:
+            color = select_brand_color(args.flat_color, style["brand_colors"])
+            print(f"Generando fondo de color (sin Gemini, sin API key): {color['label']}")
+            image = render_flat_color_image(color, output_size)
+            image.save(out_path, "PNG")
+            print(f"Imagen guardada en: {out_path} ({output_size[0]}x{output_size[1]})")
+            return 0
+
         api_key = ensure_gemini_api_key()
 
         state = _load_state()
@@ -377,7 +508,9 @@ def main() -> int:
         copy_text = read_copy_text(copy_path)
 
         print("Analizando emoción central y tema con Gemini...")
-        analysis = analyze_copy(copy_text, api_key, style, archetype, camera_angle, setting)
+        analysis = analyze_copy(
+            copy_text, api_key, style, archetype, camera_angle, setting, args.protagonist
+        )
         print(f"  Emoción central: {analysis['emotion_es']} ({analysis['emotion_en']})")
         print(f"  Tema: {analysis['theme_en']}")
         print(f"  Ubicación elegida: {analysis['setting']}")
