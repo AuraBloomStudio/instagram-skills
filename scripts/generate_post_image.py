@@ -12,9 +12,10 @@ Flow:
      color photography, generic/anonymous people, no overlaid text. Title and
      signature are added later by hand in Canva, so the image itself carries
      no text at all.
-  4. Call Gemini Flash Image with that prompt, requesting a 4:5 image.
-  5. Resize to exactly 1080x1350 and save the PNG to
-     Desktop/Imagenes Posts/<nombre-del-copy>.png
+  4. Call Gemini Flash Image with that prompt, requesting the aspect ratio
+     given by --aspect (default 4:5; also supports 9:16 for Stories and 1:1).
+  5. Resize to the exact matching pixel size and save the PNG to
+     Desktop/Imagenes Posts/<nombre-del-copy>.png (or wherever --out-dir points)
 
 The visual style (lighting, composition options, how metaphors get reinterpreted)
 lives entirely in scripts/references/image_prompt_style.md, not in this file --
@@ -59,8 +60,28 @@ TEXT_MODEL = os.getenv("GEMINI_TEXT_MODEL", "gemini-flash-latest")
 IMAGE_MODEL = os.getenv("GEMINI_IMAGE_MODEL", "gemini-3.1-flash-image")
 
 DEFAULT_OUTPUT_DIR = Path(os.path.expanduser("~")) / "Desktop" / "Imagenes Posts"
-OUTPUT_SIZE = (1080, 1350)
-IMAGE_ASPECT_RATIO = "4:5"
+
+# Aspect ratios this script knows how to produce. "size" is the exact pixel
+# output after resize; "prompt_text" is appended to the image prompt in place
+# of whatever aspect-ratio line lives in BRAND_STYLE, so the written prompt
+# always matches the aspectRatio actually sent to the Gemini API -- keeping
+# these in sync in one place avoids asking for 9:16 while telling Gemini "4:5"
+# in the prompt text.
+ASPECT_RATIO_SPECS = {
+    "4:5": {
+        "size": (1080, 1350),
+        "prompt_text": "Vertical 4:5 composition, high resolution.",
+    },
+    "9:16": {
+        "size": (1080, 1920),
+        "prompt_text": "Vertical 9:16 composition (Instagram/Facebook Stories format), high resolution.",
+    },
+    "1:1": {
+        "size": (1080, 1080),
+        "prompt_text": "Square 1:1 composition, high resolution.",
+    },
+}
+DEFAULT_ASPECT_RATIO = "4:5"
 
 STYLE_GUIDE_PATH = Path(__file__).resolve().parent / "references" / "image_prompt_style.md"
 STATE_PATH = REPO_ROOT / "testing" / "image_gen_state.json"
@@ -276,20 +297,21 @@ def analyze_copy(
     return analysis
 
 
-def build_image_prompt(analysis: dict, style: dict) -> str:
+def build_image_prompt(analysis: dict, style: dict, aspect_ratio: str) -> str:
     return (
         f"{analysis['visual_concept_en']} "
         f"Central emotional tone: {analysis['emotion_en']} "
         f"({analysis['theme_en']}). "
-        f"{style['brand_style']}"
+        f"{style['brand_style']} "
+        f"{ASPECT_RATIO_SPECS[aspect_ratio]['prompt_text']}"
     )
 
 
-def generate_image(prompt: str, api_key: str) -> bytes:
+def generate_image(prompt: str, api_key: str, aspect_ratio: str) -> bytes:
     url = f"{GEMINI_API_BASE}/{IMAGE_MODEL}:generateContent"
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"imageConfig": {"aspectRatio": IMAGE_ASPECT_RATIO}},
+        "generationConfig": {"imageConfig": {"aspectRatio": aspect_ratio}},
     }
     resp = _post_with_retry(url, api_key, payload, timeout=180)
     if resp.status_code >= 400:
@@ -321,12 +343,22 @@ def main() -> int:
         default=str(DEFAULT_OUTPUT_DIR),
         help=f'Carpeta de salida (default: "{DEFAULT_OUTPUT_DIR}")',
     )
+    parser.add_argument(
+        "--aspect",
+        default=DEFAULT_ASPECT_RATIO,
+        choices=sorted(ASPECT_RATIO_SPECS),
+        help=f"Aspect ratio de salida (default: {DEFAULT_ASPECT_RATIO}). "
+        "9:16 para Stories, 1:1 para cuadrado.",
+    )
     args = parser.parse_args()
 
     copy_path = Path(args.copy_file)
     if not copy_path.exists():
         print(f"No existe el archivo: {copy_path}", file=sys.stderr)
         return 1
+
+    aspect_ratio = args.aspect
+    output_size = ASPECT_RATIO_SPECS[aspect_ratio]["size"]
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -352,17 +384,17 @@ def main() -> int:
         print(f"  Composición elegida: {analysis['composition_archetype']}")
         print(f"  Ángulo de cámara elegido: {analysis['camera_angle']}")
 
-        image_prompt = build_image_prompt(analysis, style)
+        image_prompt = build_image_prompt(analysis, style, aspect_ratio)
         print(f"Prompt de imagen:\n  {image_prompt}\n")
 
-        print(f"Generando imagen con {IMAGE_MODEL}...")
-        image_bytes = generate_image(image_prompt, api_key)
+        print(f"Generando imagen con {IMAGE_MODEL} (aspect {aspect_ratio})...")
+        image_bytes = generate_image(image_prompt, api_key, aspect_ratio)
 
         image = Image.open(BytesIO(image_bytes)).convert("RGB")
-        if image.size != OUTPUT_SIZE:
-            image = image.resize(OUTPUT_SIZE, Image.LANCZOS)
+        if image.size != output_size:
+            image = image.resize(output_size, Image.LANCZOS)
         image.save(out_path, "PNG")
-        print(f"Imagen guardada en: {out_path} ({OUTPUT_SIZE[0]}x{OUTPUT_SIZE[1]})")
+        print(f"Imagen guardada en: {out_path} ({output_size[0]}x{output_size[1]})")
 
         _save_state(state)
     except GenerationError as e:

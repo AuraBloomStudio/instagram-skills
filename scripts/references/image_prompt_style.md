@@ -70,12 +70,19 @@ kept unidentifiable" (CAMERA_ANGLES), and rotates both independently.
 - **Color and light.** Full color, cinematic, warm (golds, amber, sunset light
   or soft warm interior light), a film-still / editorial look. Never
   black-and-white, never desaturated, never an old/antique sepia look.
-- **Aspect ratio.** 4:5 vertical, 1080x1350px — Instagram/Facebook feed format.
+- **Aspect ratio.** Whatever `--aspect` the calling skill passes to
+  `generate_post_image.py` (default 4:5 vertical / 1080x1350px for feed
+  posts; 9:16 / 1080x1920px for Stories; 1:1 / 1080x1080px also supported).
+  The exact aspect-ratio sentence appended to the prompt lives in code
+  (`ASPECT_RATIO_SPECS`), not in `BRAND_STYLE` below, so the written prompt
+  always matches the aspectRatio actually sent to the Gemini API. Don't add
+  an aspect-ratio sentence back into `BRAND_STYLE` -- it would go stale the
+  moment a skill requests a different ratio.
 
 ## BRAND_STYLE (verbatim prompt suffix, appended after the scene description)
 
 <!-- BEGIN:BRAND_STYLE -->
-Cinematic color photography, warm lighting (golds, amber, sunset light or soft warm interior light), a film-still / editorial aesthetic like a well-shot production with strong cinematography. Full color, never black-and-white or desaturated; a nostalgic warmth, not an old sepia look. Soft light, shallow depth of field, subtle grain. Set in an ordinary, recognizable everyday location (a kitchen, a living room, a patio or porch, a sidewalk, a neighborhood park, a dining table, a balcony, a bedroom) -- never an open landscape, a mountain vista, a stone path or trail, a forest, or a generic artistic/cinematic backdrop; this should feel like a real domestic or everyday moment, not a staged production. The scene is always built around one or more generic human figures conveying the emotion through posture, gesture, and interaction -- never through a symbolic object (no stones, chains, keys, weights, closed doors, ropes, or similar props standing in for the feeling). Faces are never sharply focused or identifiable, and never a recognizable real person, public figure, or celebrity likeness; achieve this through angle, distance, framing, or focus (shot from behind, face turned away, face out of frame, silhouette, or soft focus). Absolutely no text, letters, words, numbers, captions, logos, or watermarks anywhere in the image; this is a bare photographic background, any title or signature will be added separately afterward. Vertical 4:5 composition, high resolution.
+Cinematic color photography, warm lighting (golds, amber, sunset light or soft warm interior light), a film-still / editorial aesthetic like a well-shot production with strong cinematography. Full color, never black-and-white or desaturated; a nostalgic warmth, not an old sepia look. Soft light, shallow depth of field, subtle grain. Set in an ordinary, recognizable everyday location (a kitchen, a living room, a patio or porch, a sidewalk, a neighborhood park, a dining table, a balcony, a bedroom) -- never an open landscape, a mountain vista, a stone path or trail, a forest, or a generic artistic/cinematic backdrop; this should feel like a real domestic or everyday moment, not a staged production. The scene is always built around one or more generic human figures conveying the emotion through posture, gesture, and interaction -- never through a symbolic object (no stones, chains, keys, weights, closed doors, ropes, or similar props standing in for the feeling). Faces are never sharply focused or identifiable, and never a recognizable real person, public figure, or celebrity likeness; achieve this through angle, distance, framing, or focus (shot from behind, face turned away, face out of frame, silhouette, or soft focus). Absolutely no text, letters, words, numbers, captions, logos, or watermarks anywhere in the image; this is a bare photographic background, any title or signature will be added separately afterward.
 <!-- END:BRAND_STYLE -->
 
 ## COMPOSITION_ARCHETYPES (the script rotates through these, avoiding the last 2 used)
