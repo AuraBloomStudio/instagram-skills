@@ -26,9 +26,18 @@ instead renders a solid or gradient background from BRAND_COLORS in
 image_prompt_style.md -- used for "quote card" carousel slides that carry no
 photo, just text added later in Canva.
 
+--visual-style <photo|minimal|book|cartoon|storytelling> switches the whole
+prompt pipeline. "photo" (the default) is completely unchanged: warm
+cinematic photography per image_prompt_style.md. Any other value reads
+scripts/references/illustration_style.md instead -- a separate, simpler rule
+set for line-art, storybook, cartoon, or sequential-panel illustration, since
+the photographic file's anonymity/composition/setting rotation is specific to
+photorealism and doesn't map cleanly onto illustrated characters.
+
 The visual style (lighting, composition options, how metaphors get reinterpreted)
-lives entirely in scripts/references/image_prompt_style.md, not in this file --
-edit that reference to tune the output without touching code.
+for photography lives entirely in scripts/references/image_prompt_style.md,
+and for illustration in scripts/references/illustration_style.md -- edit
+those references to tune the output without touching code.
 
 GEMINI_API_KEY is never hardcoded. If it is not already set as an
 environment variable, this script prompts for it (input is masked) and
@@ -93,6 +102,15 @@ ASPECT_RATIO_SPECS = {
 DEFAULT_ASPECT_RATIO = "4:5"
 
 STYLE_GUIDE_PATH = Path(__file__).resolve().parent / "references" / "image_prompt_style.md"
+ILLUSTRATION_STYLE_PATH = Path(__file__).resolve().parent / "references" / "illustration_style.md"
+VISUAL_STYLES = {
+    "photo": None,
+    "minimal": "STYLE_MINIMAL",
+    "book": "STYLE_BOOK",
+    "cartoon": "STYLE_CARTOON",
+    "storytelling": "STYLE_STORYTELLING",
+}
+DEFAULT_VISUAL_STYLE = "photo"
 STATE_PATH = REPO_ROOT / "testing" / "image_gen_state.json"
 ROTATION_HISTORY = 2  # avoid repeating any of the last N picks per category
 
@@ -122,7 +140,7 @@ def _pick_avoiding_recent(pool: list, key: str, state: dict) -> str:
     return choice
 
 
-def _extract_marked_block(text: str, name: str) -> str:
+def _extract_marked_block(text: str, name: str, source_path: Path = STYLE_GUIDE_PATH) -> str:
     match = re.search(
         rf"<!--\s*BEGIN:{name}\s*-->(.*?)<!--\s*END:{name}\s*-->",
         text,
@@ -130,7 +148,7 @@ def _extract_marked_block(text: str, name: str) -> str:
     )
     if not match:
         raise GenerationError(
-            f"No se encontró el bloque {name} en {STYLE_GUIDE_PATH}. "
+            f"No se encontró el bloque {name} en {source_path}. "
             "Revisa que los marcadores <!-- BEGIN/END --> sigan intactos."
         )
     return match.group(1).strip()
@@ -162,6 +180,23 @@ def load_style_guide() -> dict:
         "settings": _numbered_list("SETTINGS"),
         "brand_colors": _numbered_list("BRAND_COLORS"),
     }
+
+
+def load_illustration_style(visual_style: str) -> dict:
+    """Load the analysis rules + style suffix for a non-photo --visual-style.
+    Only BRAND_COLORS (for --flat-color) comes from image_prompt_style.md;
+    everything else here is illustration-specific."""
+    if visual_style not in VISUAL_STYLES or VISUAL_STYLES[visual_style] is None:
+        raise GenerationError(f"'{visual_style}' no es un estilo de ilustración válido.")
+    if not ILLUSTRATION_STYLE_PATH.exists():
+        raise GenerationError(f"No existe el archivo de estilo: {ILLUSTRATION_STYLE_PATH}")
+    text = ILLUSTRATION_STYLE_PATH.read_text(encoding="utf-8")
+    analysis_rules = _extract_marked_block(
+        text, "ILLUSTRATION_ANALYSIS_RULES", ILLUSTRATION_STYLE_PATH
+    )
+    style_block_name = VISUAL_STYLES[visual_style]
+    style_suffix = _extract_marked_block(text, style_block_name, ILLUSTRATION_STYLE_PATH)
+    return {"analysis_rules": analysis_rules, "style_suffix": style_suffix}
 
 
 ANALYSIS_SYSTEM_PROMPT = """Eres un director de arte para una marca de sanación \
@@ -360,22 +395,7 @@ def _extract_json_object(text: str) -> dict:
     return json.loads(match.group(0))
 
 
-def analyze_copy(
-    copy_text: str,
-    api_key: str,
-    style: dict,
-    archetype: str,
-    camera_angle: str,
-    setting: str,
-    protagonist: Optional[str] = None,
-) -> dict:
-    rules = (
-        style["analysis_rules"]
-        .replace("__COMPOSITION_ARCHETYPE__", archetype)
-        .replace("__CAMERA_ANGLE__", camera_angle)
-        .replace("__SETTING__", setting)
-        .replace("__PROTAGONIST__", _protagonist_instruction(protagonist))
-    )
+def _run_emotion_analysis(rules: str, copy_text: str, api_key: str) -> dict:
     prompt = (
         ANALYSIS_SYSTEM_PROMPT.replace("__ANALYSIS_RULES__", rules)
         .replace("__COPY_TEXT__", copy_text)
@@ -397,10 +417,42 @@ def analyze_copy(
     missing = required - analysis.keys()
     if missing:
         raise GenerationError(f"Faltan campos en el análisis de Gemini: {missing}")
+    return analysis
+
+
+def analyze_copy(
+    copy_text: str,
+    api_key: str,
+    style: dict,
+    archetype: str,
+    camera_angle: str,
+    setting: str,
+    protagonist: Optional[str] = None,
+) -> dict:
+    rules = (
+        style["analysis_rules"]
+        .replace("__COMPOSITION_ARCHETYPE__", archetype)
+        .replace("__CAMERA_ANGLE__", camera_angle)
+        .replace("__SETTING__", setting)
+        .replace("__PROTAGONIST__", _protagonist_instruction(protagonist))
+    )
+    analysis = _run_emotion_analysis(rules, copy_text, api_key)
     analysis["composition_archetype"] = archetype
     analysis["camera_angle"] = camera_angle
     analysis["setting"] = setting
     return analysis
+
+
+def analyze_copy_illustration(
+    copy_text: str,
+    api_key: str,
+    illustration_style: dict,
+    protagonist: Optional[str] = None,
+) -> dict:
+    rules = illustration_style["analysis_rules"].replace(
+        "__PROTAGONIST__", _protagonist_instruction(protagonist)
+    )
+    return _run_emotion_analysis(rules, copy_text, api_key)
 
 
 def build_image_prompt(analysis: dict, style: dict, aspect_ratio: str) -> str:
@@ -409,6 +461,16 @@ def build_image_prompt(analysis: dict, style: dict, aspect_ratio: str) -> str:
         f"Central emotional tone: {analysis['emotion_en']} "
         f"({analysis['theme_en']}). "
         f"{style['brand_style']} "
+        f"{ASPECT_RATIO_SPECS[aspect_ratio]['prompt_text']}"
+    )
+
+
+def build_image_prompt_illustration(analysis: dict, illustration_style: dict, aspect_ratio: str) -> str:
+    return (
+        f"{analysis['visual_concept_en']} "
+        f"Central emotional tone: {analysis['emotion_en']} "
+        f"({analysis['theme_en']}). "
+        f"{illustration_style['style_suffix']} "
         f"{ASPECT_RATIO_SPECS[aspect_ratio]['prompt_text']}"
     )
 
@@ -472,6 +534,14 @@ def main() -> int:
         "image_prompt_style.md -- índice numérico (1, 2, ...) o texto "
         "parcial del nombre. Para slides tipo 'quote card' sin foto.",
     )
+    parser.add_argument(
+        "--visual-style",
+        default=DEFAULT_VISUAL_STYLE,
+        choices=sorted(VISUAL_STYLES),
+        help=f"Estilo visual (default: {DEFAULT_VISUAL_STYLE}, sin cambios de "
+        "comportamiento). minimal/book/cartoon/storytelling usan "
+        "illustration_style.md en vez de image_prompt_style.md.",
+    )
     args = parser.parse_args()
 
     copy_path = Path(args.copy_file)
@@ -499,25 +569,38 @@ def main() -> int:
 
         api_key = ensure_gemini_api_key()
 
-        state = _load_state()
-        archetype = _pick_avoiding_recent(style["archetypes"], "composition", state)
-        camera_angle = _pick_avoiding_recent(style["camera_angles"], "camera_angle", state)
-        setting = _pick_avoiding_recent(style["settings"], "setting", state)
-
         print(f"Leyendo copy: {copy_path.name}")
         copy_text = read_copy_text(copy_path)
 
-        print("Analizando emoción central y tema con Gemini...")
-        analysis = analyze_copy(
-            copy_text, api_key, style, archetype, camera_angle, setting, args.protagonist
-        )
-        print(f"  Emoción central: {analysis['emotion_es']} ({analysis['emotion_en']})")
-        print(f"  Tema: {analysis['theme_en']}")
-        print(f"  Ubicación elegida: {analysis['setting']}")
-        print(f"  Composición elegida: {analysis['composition_archetype']}")
-        print(f"  Ángulo de cámara elegido: {analysis['camera_angle']}")
+        if args.visual_style == "photo":
+            state = _load_state()
+            archetype = _pick_avoiding_recent(style["archetypes"], "composition", state)
+            camera_angle = _pick_avoiding_recent(style["camera_angles"], "camera_angle", state)
+            setting = _pick_avoiding_recent(style["settings"], "setting", state)
 
-        image_prompt = build_image_prompt(analysis, style, aspect_ratio)
+            print("Analizando emoción central y tema con Gemini...")
+            analysis = analyze_copy(
+                copy_text, api_key, style, archetype, camera_angle, setting, args.protagonist
+            )
+            print(f"  Emoción central: {analysis['emotion_es']} ({analysis['emotion_en']})")
+            print(f"  Tema: {analysis['theme_en']}")
+            print(f"  Ubicación elegida: {analysis['setting']}")
+            print(f"  Composición elegida: {analysis['composition_archetype']}")
+            print(f"  Ángulo de cámara elegido: {analysis['camera_angle']}")
+
+            image_prompt = build_image_prompt(analysis, style, aspect_ratio)
+        else:
+            illustration_style = load_illustration_style(args.visual_style)
+            print(f"Analizando emoción central y tema con Gemini (estilo: {args.visual_style})...")
+            analysis = analyze_copy_illustration(
+                copy_text, api_key, illustration_style, args.protagonist
+            )
+            print(f"  Emoción central: {analysis['emotion_es']} ({analysis['emotion_en']})")
+            print(f"  Tema: {analysis['theme_en']}")
+
+            image_prompt = build_image_prompt_illustration(analysis, illustration_style, aspect_ratio)
+            state = None
+
         print(f"Prompt de imagen:\n  {image_prompt}\n")
 
         print(f"Generando imagen con {IMAGE_MODEL} (aspect {aspect_ratio})...")
@@ -529,7 +612,8 @@ def main() -> int:
         image.save(out_path, "PNG")
         print(f"Imagen guardada en: {out_path} ({output_size[0]}x{output_size[1]})")
 
-        _save_state(state)
+        if state is not None:
+            _save_state(state)
     except GenerationError as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
