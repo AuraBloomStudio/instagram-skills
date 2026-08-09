@@ -45,6 +45,13 @@ detail (fixed to ask for gentle fill light instead), and `BRAND_COLORS` was
 too saturated/vibrant for a quote-card background (muted toward a dustier,
 more vintage tone).
 
+A sixth round fixed the opposite problem: shots were going too wide and flat.
+A full establishing shot (garden plus a visible kitchen interior at once) left
+the protagonist tiny in the frame, competed with itself for attention, used
+even/flat lighting with no drama, and left no clean area for a title to sit
+on top of afterward in Canva. Framing, background simplicity, light contrast,
+and negative space are now explicit rules instead of left to chance.
+
 ## Hard rules
 
 - **People are always the subject.** Never a symbolic object (stones, chains,
@@ -84,6 +91,20 @@ more vintage tone).
 - **Color and light.** Full color, cinematic, warm (golds, amber, sunset light
   or soft warm interior light), a film-still / editorial look. Never
   black-and-white, never desaturated, never an old/antique sepia look.
+- **Framing: medium or medium-close shot.** The protagonist must fill most of
+  the vertical frame, close enough to read their posture and emotion clearly.
+  Never a wide establishing shot where the person is small against a large
+  environment. Background stays simple and out of focus (shallow depth of
+  field) -- one environment only, never two competing zones at once (e.g. not
+  an exterior garden and a visible interior room in the same shot).
+- **Light and contrast: directional, not flat.** Use a clear light source and
+  visible shadow (window light, a doorway, a lamp, golden-hour sun) so the
+  image has real contrast and drama, never even, shadowless, all-around
+  lighting.
+- **Negative space for text.** Leave one clean, uncluttered area (a plain
+  wall, soft blurred background, open sky, or shadow) in the top third or
+  bottom third of the frame where a title or signature can sit afterward in
+  Canva without fighting busy detail.
 - **Aspect ratio.** Whatever `--aspect` the calling skill passes to
   `generate_post_image.py` (default 4:5 vertical / 1080x1350px for feed
   posts; 9:16 / 1080x1920px for Stories; 1:1 / 1080x1080px also supported).
@@ -96,7 +117,7 @@ more vintage tone).
 ## BRAND_STYLE (verbatim prompt suffix, appended after the scene description)
 
 <!-- BEGIN:BRAND_STYLE -->
-Cinematic color photography, warm lighting (golds, amber, sunset light or soft warm interior light), a film-still / editorial aesthetic like a well-shot production with strong cinematography. Full color, never black-and-white or desaturated; a nostalgic warmth, not an old sepia look. Soft light, shallow depth of field, subtle grain. Set in an ordinary, recognizable everyday location (a kitchen, a living room, a patio or porch, a sidewalk, a neighborhood park, a dining table, a balcony, a bedroom) -- never an open landscape, a mountain vista, a stone path or trail, a forest, or a generic artistic/cinematic backdrop; this should feel like a real domestic or everyday moment, not a staged production. The scene is always built around one or more generic human figures conveying the emotion through posture, gesture, and interaction -- never through a symbolic object (no stones, chains, keys, weights, closed doors, ropes, or similar props standing in for the feeling). Faces are never sharply focused or identifiable, and never a recognizable real person, public figure, or celebrity likeness; achieve this through angle, distance, or framing (shot from behind, face turned away, face out of frame, or silhouette). Absolutely no text, letters, words, numbers, captions, logos, or watermarks anywhere in the image; this is a bare photographic background, any title or signature will be added separately afterward.
+Cinematic color photography, warm lighting (golds, amber, sunset light or soft warm interior light), a film-still / editorial aesthetic like a well-shot production with strong cinematography. Full color, never black-and-white or desaturated; a nostalgic warmth, not an old sepia look. Directional, dramatic light with a clear source and visible shadow (window light, doorway light, lamp light, or golden-hour sun) -- never flat, even, shadowless lighting. Shallow depth of field, subtle grain. Medium or medium-close shot: the protagonist fills most of the vertical frame, close enough to read their posture and emotion clearly -- never a wide establishing shot where the person is small against a large environment. Background stays simple and softly out of focus, one environment only, never two competing zones at once (e.g. not an exterior garden and a visible interior room in the same shot). Leave one clean, uncluttered area (a plain wall, soft blurred background, open sky, or shadow) in the top third or bottom third of the frame free of visual clutter, for a title or signature to sit on afterward. Set in an ordinary, recognizable everyday location (a kitchen, a living room, a patio or porch, a sidewalk, a neighborhood park, a dining table, a balcony, a bedroom) -- never an open landscape, a mountain vista, a stone path or trail, a forest, or a generic artistic/cinematic backdrop; this should feel like a real domestic or everyday moment, not a staged production. The scene is always built around one or more generic human figures conveying the emotion through posture, gesture, and interaction -- never through a symbolic object (no stones, chains, keys, weights, closed doors, ropes, or similar props standing in for the feeling). Faces are never sharply focused or identifiable, and never a recognizable real person, public figure, or celebrity likeness; achieve this through angle, distance, or framing (shot from behind, face turned away, face out of frame, or silhouette). Absolutely no text, letters, words, numbers, captions, logos, or watermarks anywhere in the image; this is a bare photographic background, any title or signature will be added separately afterward.
 <!-- END:BRAND_STYLE -->
 
 ## COMPOSITION_ARCHETYPES (the script rotates through these, avoiding the last 2 used)
