@@ -12,3 +12,12 @@ marketing/
 
 # local skill testing scratch area
 testing/
+
+# downloaded Pexels B-roll clips (large binaries, not for the public repo)
+scripts/output_clips/
+
+# generated reel narration audio (large binaries, not for the public repo)
+scripts/output_audio/
+
+# rendered final reel videos (large binaries, not for the public repo)
+scripts/output_reels/
