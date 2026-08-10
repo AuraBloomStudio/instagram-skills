@@ -90,7 +90,12 @@ anuncios pagados.
     - No generar imagen para el archivo de caption.
 11. **Mostrar el resultado**: las N imágenes generadas (tool de Read) en
     orden de slide, la caption final, y el recordatorio de que el texto de
-    cada slide se agrega después a mano en Canva sobre su fondo.
+    cada slide se agrega después a mano en Canva sobre su fondo, siguiendo la
+    tipografía fija de `scripts/references/canva_title_style.md` (titular
+    cartel amarillo/naranja centrado + cierre en script dorado pálido
+    centrado, con la posición vertical del bloque ajustada a mano por slide
+    según su encuadre para no tapar la cara) — sin ninguna firma ni
+    atribución de marca en ninguna slide, eliminada por completo.
 
 ## Reglas duras
 
@@ -117,6 +122,11 @@ anuncios pagados.
   `constelaciones_brand_voice.md`; el estilo visual fotográfico únicamente en
   `image_prompt_style.md` (incluye `BRAND_COLORS`, compartido por todos los
   estilos); los 4 estilos ilustrados únicamente en `illustration_style.md`.
+- El título/texto de cada slide en Canva sigue siempre la tipografía fija de
+  `canva_title_style.md`; la posición vertical del bloque no es un valor
+  fijo — se ajusta a mano por slide según su encuadre para no tapar la cara
+  de la protagonista. Nunca se agrega firma de marca (nombre de autor,
+  @handle) a ninguna slide.
 
 ## Recursos
 
@@ -126,6 +136,9 @@ anuncios pagados.
 - `../../scripts/references/image_prompt_style.md` — estilo fotográfico
   (default) y la paleta `BRAND_COLORS` (los usa `generate_post_image.py`, no
   esta skill directamente).
+- `../../scripts/references/canva_title_style.md` — tipografía y color del
+  título/texto de slide para el paso manual en Canva, y la regla de que no
+  se agrega firma.
 - `../../scripts/references/illustration_style.md` — los 4 estilos
   ilustrados (`minimal`, `book`, `cartoon`, `storytelling`) y su límite de
   consistencia entre slides conocido (ver ese archivo).

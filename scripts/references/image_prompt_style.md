@@ -6,8 +6,10 @@ for a style tweak. Each block is delimited by an HTML-comment marker pair
 (`<!-- BEGIN:X -->` / `<!-- END:X -->`); the script extracts the text between the
 markers verbatim, so keep the markers intact and put your edits inside them.
 
-This file governs the BACKGROUND PHOTO only. Title and signature text are added
-afterward by hand in Canva — Gemini never generates on-image text.
+This file governs the BACKGROUND PHOTO only. Title text is added afterward by
+hand in Canva, following the fixed typography spec in `canva_title_style.md`
+— Gemini never generates on-image text. No signature/attribution is ever
+added to any post (see `canva_title_style.md`'s hard rule).
 
 ## Why this file exists
 
@@ -103,8 +105,8 @@ and negative space are now explicit rules instead of left to chance.
   lighting.
 - **Negative space for text.** Leave one clean, uncluttered area (a plain
   wall, soft blurred background, open sky, or shadow) in the top third or
-  bottom third of the frame where a title or signature can sit afterward in
-  Canva without fighting busy detail.
+  bottom third of the frame where a title can sit afterward in Canva without
+  fighting busy detail.
 - **Aspect ratio.** Whatever `--aspect` the calling skill passes to
   `generate_post_image.py` (default 4:5 vertical / 1080x1350px for feed
   posts; 9:16 / 1080x1920px for Stories; 1:1 / 1080x1080px also supported).
@@ -117,7 +119,7 @@ and negative space are now explicit rules instead of left to chance.
 ## BRAND_STYLE (verbatim prompt suffix, appended after the scene description)
 
 <!-- BEGIN:BRAND_STYLE -->
-Cinematic color photography, warm lighting (golds, amber, sunset light or soft warm interior light), a film-still / editorial aesthetic like a well-shot production with strong cinematography. Full color, never black-and-white or desaturated; a nostalgic warmth, not an old sepia look. Directional, dramatic light with a clear source and visible shadow (window light, doorway light, lamp light, or golden-hour sun) -- never flat, even, shadowless lighting. Shallow depth of field, subtle grain. Medium or medium-close shot: the protagonist fills most of the vertical frame, close enough to read their posture and emotion clearly -- never a wide establishing shot where the person is small against a large environment. Background stays simple and softly out of focus, one environment only, never two competing zones at once (e.g. not an exterior garden and a visible interior room in the same shot). Leave one clean, uncluttered area (a plain wall, soft blurred background, open sky, or shadow) in the top third or bottom third of the frame free of visual clutter, for a title or signature to sit on afterward. Set in an ordinary, recognizable everyday location (a kitchen, a living room, a patio or porch, a sidewalk, a neighborhood park, a dining table, a balcony, a bedroom) -- never an open landscape, a mountain vista, a stone path or trail, a forest, or a generic artistic/cinematic backdrop; this should feel like a real domestic or everyday moment, not a staged production. The scene is always built around one or more generic human figures conveying the emotion through posture, gesture, and interaction -- never through a symbolic object (no stones, chains, keys, weights, closed doors, ropes, or similar props standing in for the feeling). Faces are never sharply focused or identifiable, and never a recognizable real person, public figure, or celebrity likeness; achieve this through angle, distance, or framing (shot from behind, face turned away, face out of frame, or silhouette). Absolutely no text, letters, words, numbers, captions, logos, or watermarks anywhere in the image; this is a bare photographic background, any title or signature will be added separately afterward.
+Cinematic color photography, warm lighting (golds, amber, sunset light or soft warm interior light), a film-still / editorial aesthetic like a well-shot production with strong cinematography. Full color, never black-and-white or desaturated; a nostalgic warmth, not an old sepia look. Directional, dramatic light with a clear source and visible shadow (window light, doorway light, lamp light, or golden-hour sun) -- never flat, even, shadowless lighting. Shallow depth of field, subtle grain. Medium or medium-close shot: the protagonist fills most of the vertical frame, close enough to read their posture and emotion clearly -- never a wide establishing shot where the person is small against a large environment. Background stays simple and softly out of focus, one environment only, never two competing zones at once (e.g. not an exterior garden and a visible interior room in the same shot). Leave one clean, uncluttered area (a plain wall, soft blurred background, open sky, or shadow) in the top third or bottom third of the frame free of visual clutter, for a title or signature to sit on afterward. Set in an ordinary, recognizable everyday location (a kitchen, a living room, a patio or porch, a sidewalk, a neighborhood park, a dining table, a balcony, a bedroom) -- never an open landscape, a mountain vista, a stone path or trail, a forest, or a generic artistic/cinematic backdrop; this should feel like a real domestic or everyday moment, not a staged production. The scene is always built around one or more generic human figures conveying the emotion through posture, gesture, and interaction -- never through a symbolic object (no stones, chains, keys, weights, closed doors, ropes, or similar props standing in for the feeling). Faces are never sharply focused or identifiable, and never a recognizable real person, public figure, or celebrity likeness; achieve this through angle, distance, or framing (shot from behind, face turned away, face out of frame, or silhouette). Absolutely no text, letters, words, numbers, captions, logos, or watermarks anywhere in the image; this is a bare photographic background, any title text will be added separately afterward by hand in Canva (no signature or attribution is ever added).
 <!-- END:BRAND_STYLE -->
 
 ## COMPOSITION_ARCHETYPES (the script rotates through these, avoiding the last 2 used)
@@ -213,6 +215,8 @@ location options, `ANALYSIS_RULES` to change how metaphors and emotions get
 reinterpreted, or `BRAND_COLORS` to change the flat-color slide palette (e.g.
 to swap in real Canva hex codes). `scripts/generate_post_image.py` re-reads
 this file on every run, so no code edit is needed for a pure style change.
+For the on-image title text itself (font, color, layout, and the no-signature
+rule), edit `canva_title_style.md` instead — this file never governs text.
 
 ## Rotation state
 

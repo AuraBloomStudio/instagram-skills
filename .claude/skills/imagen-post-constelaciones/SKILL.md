@@ -1,6 +1,6 @@
 ---
 name: imagen-post-constelaciones
-description: Generate the cover/background photo for an approved Constelaciones Familiares Instagram/Facebook post copy (.docx or .txt file from "Posts Constelaciones"). Reads the copy, has Gemini analyze its central emotion and theme, builds an image prompt following the house visual style in scripts/references/image_prompt_style.md (warm cinematic color, real people in everyday domestic scenes, no literal metaphor objects, rotated composition/setting/camera-angle so consecutive posts don't repeat the same framing, no on-image text, 4:5 vertical), generates the image via Gemini Flash Image, and saves it to Desktop/Imagenes Posts using the same filename as the copy. Runs scripts/generate_post_image.py internally via Bash -- never asks the user to type the python command or paste the API key. Use when asked to generate/make the cover image, background photo, or "foto de portada" for a post or copy file. Not for writing the caption itself, and not for adding title/signature text to the image (done by hand in Canva afterward).
+description: Generate the cover/background photo for an approved Constelaciones Familiares Instagram/Facebook post copy (.docx or .txt file from "Posts Constelaciones"). Reads the copy, has Gemini analyze its central emotion and theme, builds an image prompt following the house visual style in scripts/references/image_prompt_style.md (warm cinematic color, real people in everyday domestic scenes, no literal metaphor objects, rotated composition/setting/camera-angle so consecutive posts don't repeat the same framing, no on-image text, 4:5 vertical), generates the image via Gemini Flash Image, and saves it to Desktop/Imagenes Posts using the same filename as the copy. Runs scripts/generate_post_image.py internally via Bash -- never asks the user to type the python command or paste the API key. Use when asked to generate/make the cover image, background photo, or "foto de portada" for a post or copy file. Not for writing the caption itself, and not for adding title text to the image (done by hand in Canva afterward, following the fixed typography spec in scripts/references/canva_title_style.md). No brand signature/attribution is ever added to any post.
 ---
 
 # Imagen de Portada — Constelaciones Familiares
@@ -18,8 +18,10 @@ el chat.
 - "genera el fondo para [nombre del copy]"
 - Cualquier variante que pida la imagen/foto/portada de un copy ya escrito.
 
-No se activa para: escribir o editar el copy en sí, ni para agregar
-título/firma sobre la imagen (eso se hace después a mano en Canva).
+No se activa para: escribir o editar el copy en sí, ni para agregar título
+sobre la imagen (eso se hace después a mano en Canva, siguiendo
+`../../scripts/references/canva_title_style.md`). Nunca se agrega firma de
+marca (nombre de autor, @handle) a ningún post -- se eliminó por completo.
 
 ## Flujo
 
@@ -61,11 +63,20 @@ título/firma sobre la imagen (eso se hace después a mano en Canva).
   de estilo, edita ese archivo de referencia, no esta skill.
 - Un solo archivo de copy por invocación salvo que el usuario pida
   explícitamente correr varios en lote.
+- El título en Canva sigue siempre la tipografía fija de
+  `scripts/references/canva_title_style.md` (titular cartel amarillo/naranja
+  centrado + cierre en script dorado pálido centrado); la posición vertical
+  del bloque no es un valor fijo — se ajusta a mano según el encuadre de cada
+  foto para no tapar la cara de la protagonista. Nunca se agrega firma de
+  marca (nombre de autor, @handle) a ninguna imagen — eso vive en el mismo
+  archivo como regla dura, no como opción.
 
 ## Recursos
 
 - `scripts/generate_post_image.py` — el script que hace todo el trabajo.
 - `scripts/references/image_prompt_style.md` — reglas de estilo visual,
   editable sin tocar código.
+- `scripts/references/canva_title_style.md` — tipografía y color del título
+  para el paso manual en Canva, y la regla de que no se agrega firma.
 - `testing/image_gen_state.json` — estado de rotación (se autogenera, no
   tocar a mano salvo para resetear la rotación).

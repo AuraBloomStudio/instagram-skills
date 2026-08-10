@@ -48,7 +48,13 @@ No se activa para posts de feed (`post-constelaciones`) ni carruseles
    (personas reales, escenas cotidianas, sin objetos literales) que las otras
    dos skills — solo cambia el formato de salida.
 7. **Mostrar el resultado**: la imagen 9:16 generada (tool de Read) + la ruta
-   final.
+   final, y el recordatorio de que el texto se agrega después a mano en
+   Canva siguiendo la tipografía fija de
+   `scripts/references/canva_title_style.md` (titular cartel amarillo/naranja
+   centrado + cierre en script dorado pálido centrado, con la posición
+   vertical del bloque ajustada a mano según el encuadre de esta foto para no
+   tapar la cara) — sin ninguna firma ni atribución de marca, eliminada por
+   completo.
 
 ## Reglas duras
 
@@ -57,6 +63,11 @@ No se activa para posts de feed (`post-constelaciones`) ni carruseles
 - Nunca incluir "Para asentar", el CTA fijo del libro, ni hashtags.
 - No generar la imagen antes de que el usuario apruebe el texto.
 - Nunca pedir la API key de Gemini ni el comando de Python al usuario.
+- El texto en Canva sigue siempre la tipografía fija de
+  `canva_title_style.md`; la posición vertical del bloque no es un valor
+  fijo — se ajusta a mano según el encuadre de cada foto para no tapar la
+  cara de la protagonista. Nunca se agrega firma de marca (nombre de autor,
+  @handle) a ninguna historia.
 
 ## Recursos
 
@@ -64,6 +75,8 @@ No se activa para posts de feed (`post-constelaciones`) ni carruseles
   estructuras de historia (bloque `STORY_STRUCTURES`).
 - `../../scripts/references/image_prompt_style.md` — estilo visual de la foto
   de fondo (lo usa `generate_post_image.py`, no esta skill directamente).
+- `../../scripts/references/canva_title_style.md` — tipografía y color del
+  texto para el paso manual en Canva, y la regla de que no se agrega firma.
 - `../../scripts/generate_post_image.py` — genera la imagen, con `--aspect 9:16`.
 - `testing/copy_gen_state.json` — rotación de estructura (clave
   `"story_structure"`).
