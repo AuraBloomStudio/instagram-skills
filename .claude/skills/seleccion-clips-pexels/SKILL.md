@@ -1,6 +1,6 @@
 ---
 name: seleccion-clips-pexels
-description: Given a full reel voice-over script (guion) for Constelaciones Familiares, split it into 6-8 key emotional moments and write specific brand-consistent English search terms per moment (warm domestic scenes, everyday women, no literal metaphor objects -- same vocabulary as scripts/references/image_prompt_style.md). Picks ONE protagonist author with the best Pexels coverage (Videos AND Photos APIs) across the whole reel, excluding studio/preset accounts by name, then searches every moment restricted to that author only. If she has nothing solo for a moment, tries her accompanied by others (still her, relaxed search terms), then a faceless cutaway detail shot (hands, a mug, a window, domestic texture), and only then falls back to a different author -- each tier labeled explicitly in the summary. Downloads candidates, runs a mandatory ffmpeg frame-by-frame visual review (scene/emotion fit, brand setting, AND face/appearance consistency of the protagonist) before showing results, swapping or dropping weak candidates instead of forcing them. Saves to scripts/output_clips/<reel>/ plus an orden_edicion.txt. Use for "selecciona clips para el reel de [tema]", "busca B-roll para este guion". Not for writing the reel script itself (write it first, then paste it here), not for still cover photos (use imagen-post-constelaciones), and not for carousels/posts/stories (use carrusel-constelaciones, post-constelaciones, historias-constelaciones).
+description: Given a full reel voice-over script (guion) for Constelaciones Familiares, split it into 6-8 key emotional moments and write specific brand-consistent English search terms per moment (warm domestic scenes, everyday women, no literal metaphor objects -- same vocabulary as scripts/references/image_prompt_style.md). Picks ONE protagonist author with the best Pexels coverage (Videos AND Photos APIs) across the whole reel, excluding studio/preset accounts by name, then searches every moment restricted to that author only. If she has nothing solo for a moment, tries her accompanied by others (still her, relaxed search terms), then a faceless cutaway detail shot (hands, a mug, a window, domestic texture), and only then falls back to a different author -- each tier labeled explicitly in the summary. If the user also gives the reel's rewritten on-screen hook text (distinct from the guion's literal first line), searches and downloads a SEPARATE dedicated clip for it -- own search terms, own tier cascade, own entry in orden_edicion.txt ("Momento gancho"), never mixed into moment 1. Downloads candidates, runs a mandatory ffmpeg frame-by-frame visual review (scene/emotion fit, brand setting, AND face/appearance consistency of the protagonist) before showing results, swapping or dropping weak candidates instead of forcing them. Saves to scripts/output_clips/<reel>/ plus an orden_edicion.txt. Use for "selecciona clips para el reel de [tema]", "busca B-roll para este guion". Not for writing the reel script itself (write it first, then paste it here), not for still cover photos (use imagen-post-constelaciones), and not for carousels/posts/stories (use carrusel-constelaciones, post-constelaciones, historias-constelaciones).
 ---
 
 # Selección de clips Pexels (B-roll para reels)
@@ -51,6 +51,13 @@ no solo autoría.
 1. **Recibir el guion.** El usuario pega el texto narrado completo del reel
    en el chat. Si no da un nombre para el reel, derivar un slug corto del
    tema/hook del guion y avisar cuál se usó (no preguntar antes de trabajar).
+   **Input adicional opcional: el texto del gancho.** Si el usuario también
+   pega el titular reescrito que va a usar como gancho inicial (el mismo que
+   después se pasa a `edicion-reel-json2video` como `--hook-main`/
+   `--hook-accent`), capturarlo aparte -- nunca reemplaza ni se mezcla con
+   el guion narrado ni con sus 6-8 momentos. Si no lo da, todo el flujo
+   sigue exactamente igual que antes (sin bloque de gancho en el JSON ni en
+   `orden_edicion.txt`).
 
 2. **Dividir el guion en 6-8 momentos emocionales clave.** Cada momento es
    un beat con una carga emocional distinta (p. ej. culpa, confrontación,
@@ -104,6 +111,13 @@ no solo autoría.
      light", "hand resting on windowsill warm light", "door ajar hallway
      warm light". Se usan solo como tercer intento (paso 5, nivel B) cuando
      la protagonista no tiene nada, ni sola ni acompañada.
+   - **Si el usuario dio texto de gancho (paso 1):** escribir 2-3
+     `search_terms` en inglés específicos para ESE texto (mismas reglas de
+     vocabulario que arriba), igual que se hace para cualquier momento. El
+     gancho suele ser un titular reescrito, no la línea 1 literal del guion
+     -- los términos van sobre lo que el gancho realmente dice, no sobre la
+     `guion_line` del momento 1. `cutaway_terms` para el gancho es opcional,
+     igual que en los momentos.
 
 4. **Guardar el análisis en JSON** en
    `testing/pexels_moments/<reel_slug>.json` (crear la carpeta si no
@@ -112,6 +126,11 @@ no solo autoría.
    {
      "reel_name": "<nombre o slug del reel>",
      "general_terms": ["term one", "term two", "term three"],
+     "hook": {
+       "text": "texto exacto del gancho, ej. NO ERA mal carácter",
+       "search_terms": ["term one", "term two"],
+       "cutaway_terms": ["detail term one"]
+     },
      "moments": [
        {
          "order": 1,
@@ -123,6 +142,9 @@ no solo autoría.
      ]
    }
    ```
+   La clave `"hook"` es **opcional** -- solo va si el usuario dio texto de
+   gancho en el paso 1. Sin ella, el comportamiento es idéntico al de antes
+   de esta función (ningún clip de gancho se busca ni se descarga).
 
 5. **Ejecutar el script** por la tool de Bash, desde la raíz del repo:
    ```
@@ -183,12 +205,24 @@ no solo autoría.
      términos usados, tipo de archivo, y autor/link de Pexels de cada clip,
      con las marcas `⚠ protagonista distinta` / `⚠ match aproximado` donde
      aplique.
+   - **Si el JSON trae `"hook"`**: corre exactamente la misma cascada de 4
+     niveles de la Fase 2 (sola -> acompañada -> imagen de apoyo ->
+     protagonista distinta -> match aproximado) y el mismo dedup global,
+     pero como una entrada aparte, nunca mezclada con el momento 1. Descarga
+     a `00_gancho_<variante>.mp4` (o `.jpg`) y escribe un bloque propio
+     **`Momento gancho -- texto: "..."`** en `orden_edicion.txt`, ubicado
+     antes de "Momento 01". `--hook-only` reprocesa solo esa entrada (sin
+     tocar los 6-8 momentos) haciendo merge en el archivo existente, igual
+     que `--only` para momentos numéricos -- se pueden combinar.
 
 6. **Revisión visual obligatoria antes de mostrarle nada al usuario.** El
    script solo filtra por metadata (orientación, duración, autor) -- no
    puede detectar si un clip realmente encaja ni si de verdad se ve la
-   misma persona. Con la tool de Bash y `ffmpeg` (ya disponible), extraer un
-   frame de cada clip/foto descargado (para video: `ffmpeg -y -ss 1.5 -i
+   misma persona. El clip del gancho (`00_gancho_*`), si lo hay, pasa por
+   esta misma revisión y los mismos 6 chequeos que cualquier momento -- no
+   es un gate distinto ni más liviano. Con la tool de Bash y `ffmpeg` (ya
+   disponible), extraer un frame de cada clip/foto descargado (para video:
+   `ffmpeg -y -ss 1.5 -i
    archivo.mp4 -vframes 1 -vf scale=270:480:force_original_aspect_ratio=
    decrease,pad=270:480:(ow-iw)/2:(oh-ih)/2:color=black salida.jpg`; para
    foto, copiar/redimensionar directo), armar una grilla por momento con
@@ -240,12 +274,19 @@ no solo autoría.
    de la carpeta, cuántos momentos se cubrieron con esa protagonista,
    cuántos quedaron como `⚠ protagonista distinta`, `⚠ match aproximado`, o
    con menos candidatos de lo normal (para que el usuario los busque a mano
-   o grabe su propio footage si lo necesita).
+   o grabe su propio footage si lo necesita). Si había gancho, mencionar por
+   separado si su clip dedicado se resolvió bien o con qué advertencia (nivel
+   de la cascada, o sin candidatos).
 
 ## Reglas duras
 
 - Siempre `orientation=portrait` -- nunca clips horizontales, este es
   contenido para Reels 9:16.
+- **El clip del gancho, cuando existe, es una entrada aparte -- nunca se
+  mezcla con el momento 1.** Términos de búsqueda, tier de la cascada,
+  nombre de archivo (`00_gancho_*`) y bloque en `orden_edicion.txt`
+  (`Momento gancho --`) son siempre propios. `edicion-reel-json2video` cae
+  de vuelta a reusar el clip de momento 1 solo si este bloque no existe.
 - **Protagonista única, estricta, no best-effort.** Antes de aceptar un
   clip de otra persona, agotar la cascada completa: sola -> acompañada
   (misma protagonista, mismo `author_id`) -> imagen de apoyo sin rostro ->
@@ -285,10 +326,12 @@ no solo autoría.
   Photos), busca por momento restringido a ese autor con la cascada de 4
   niveles, filtra, descarga y genera `orden_edicion.txt`. Acepta `--only
   5,7,8` para re-testear solo esos momentos (hace merge en el
-  `orden_edicion.txt` existente en vez de sobreescribirlo) y
+  `orden_edicion.txt` existente en vez de sobreescribirlo),
   `--protagonist-id ID --protagonist-name NOMBRE` para saltar la Fase 0 y
   reusar un protagonista ya elegido en una corrida anterior -- útil después
-  de ajustar `cutaway_terms` o `search_terms` de un momento puntual.
+  de ajustar `cutaway_terms` o `search_terms` de un momento puntual -- y
+  `--hook-only` para reprocesar solo el clip del gancho (requiere `"hook"`
+  en el JSON), combinable con `--only`.
 - `testing/pexels_moments/` -- JSON intermedio por reel (gitignored).
 - `scripts/output_clips/` -- clips/fotos descargados por reel (gitignored,
   son binarios, no se suben al repo).

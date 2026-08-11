@@ -41,7 +41,6 @@ from __future__ import annotations
 
 import argparse
 import getpass
-import html
 import math
 import os
 import re
@@ -69,15 +68,21 @@ RESOLUTION = "instagram-story"
 CANVAS_WIDTH = 1080
 CANVAS_HEIGHT = 1920
 
-# "Dorado" from the brand's BRAND_COLORS palette (scripts/references/
-# image_prompt_style.md). Both word-color (the currently-spoken word) and
-# line-color (the rest of the line) are set to the SAME gold on purpose --
-# an earlier version used white for the line and gold only for the active
-# word, but the user wanted one solid color throughout, not a white/gold
-# contrast. "classic-progressive" still reveals word by word, it just no
-# longer changes color when it does.
-SUBTITLE_WORD_COLOR = "#B8985E"
+# Vivid cyan (approved via a local mockup), replacing the earlier solid
+# gold. Both word-color (the currently-spoken word) and line-color (the rest
+# of the line) are set to the SAME color on purpose -- an earlier version
+# used white for the line and gold only for the active word, but the user
+# wanted one solid color throughout, not a two-color contrast; that decision
+# still holds, only the color itself changed. "classic-progressive" still
+# reveals word by word, it just doesn't change color when it does.
+SUBTITLE_WORD_COLOR = "#22D3EE"
 SUBTITLE_LINE_COLOR = SUBTITLE_WORD_COLOR
+# Subtitles never had a font-family before (JSON2Video's own default for the
+# "subtitles" element is "Arial" when unset) -- now explicitly Poppins to
+# match the rest of the brand's title typography
+# (scripts/references/canva_title_style.md).
+SUBTITLE_FONT = "Poppins"
+SUBTITLE_FONT_WEIGHT = "700"
 # Custom pixel position instead of a preset. The "mid-bottom-center" preset
 # (ASS \pos landed at y=1440, 25% up from the bottom) cleared Instagram's UI
 # but still read as "stuck to the bottom" -- confirmed too low by the user
@@ -117,35 +122,58 @@ GRADIENT_HTML_TEMPLATE = (
 )
 
 # --- Hook text (shown before the narration starts) -------------------------
-# Two font families mixed in one overlay: a bold sans headline word/phrase
-# (brand-neutral, high-impact) plus an italic serif accent phrase in the
-# brand gold, confirmed rendering correctly together via a real render
-# (Poppins + Playfair Display, both resolved as real Google Fonts by
-# JSON2Video's html element with no extra @import needed).
-# Main phrase in the brand's cream/beige (from BRAND_COLORS in
-# image_prompt_style.md: "Degradado -- Crema/beige (#E3D5BF) a Dorado
-# (#B8985E)") instead of pure white -- flat white read too plain/generic
-# against the warm footage.
+# Two SEPARATE "text" elements (not one "html" element with inline CSS). An
+# earlier version put both phrases in one `type: "html"` element with
+# font-family in inline CSS and a comment claiming JSON2Video resolved
+# Poppins/Playfair Display as real Google Fonts there "with no extra @import
+# needed" -- that was never actually verified and was wrong: confirmed via a
+# frame extracted from a real render that the html element fell back to a
+# generic system sans, not Poppins. JSON2Video's own docs document automatic
+# Google-Font-by-name resolution (no @import) ONLY for the native `type:
+# "text"` element (and separately for `type: "subtitles"`, whose font-family
+# defaults to "Arial" if unset) -- the `html` element's docs never mention
+# font-family/Google Fonts at all. Hence: two `text` elements, stacked via
+# custom y, one per phrase/font/color.
+#
+# Colors follow the same title spec as the static posts
+# (scripts/references/canva_title_style.md): main headline in the vivid
+# amber #F2A900, accent/closing line in the pale desaturated gold #FAE8A8 --
+# kept in sync on purpose so reels and static posts read as one brand system.
 HOOK_DURATION_S = 2.0
 HOOK_MAIN_FONT = "Poppins"
 HOOK_MAIN_WEIGHT = 800
-HOOK_MAIN_COLOR = "#E3D5BF"
+HOOK_MAIN_COLOR = "#F2A900"
 HOOK_MAIN_SIZE = 88
-HOOK_ACCENT_FONT = "Playfair Display"
-HOOK_ACCENT_COLOR = SUBTITLE_WORD_COLOR
-HOOK_ACCENT_SIZE = 100
-HOOK_Y = 650  # upper-middle zone: clear of the top edge, far above SUBTITLE_Y
-HOOK_BOX_HEIGHT = 500
-HOOK_HTML_TEMPLATE = (
-    "<div style='width:{width}px;text-align:center;line-height:1.15;"
-    "font-family:sans-serif;'>"
-    "<span style='font-family:\"{main_font}\";font-weight:{main_weight};"
-    "color:{main_color};font-size:{main_size}px;'>{main_text}</span><br/>"
-    "<span style='font-family:\"{accent_font}\";font-style:italic;"
-    "font-weight:600;color:{accent_color};font-size:{accent_size}px;'>"
-    "{accent_text}</span>"
-    "</div>"
+# Hard, crisp text-stroke (a real vector outline, not a text-shadow/blur) on
+# the main phrase only -- confirmed via a local mockup that it fixes contrast
+# against bright backgrounds (e.g. a sunlit window) without any glow/blur
+# artifact. The accent phrase never got this in testing because it usually
+# lands over darker footage (hair/shadow) where contrast is already fine.
+HOOK_MAIN_STROKE_WIDTH = "3px"
+HOOK_MAIN_STROKE_COLOR = "#1C1208"
+# Direct font-url to the real italic TTF instead of font-family:"Playfair
+# Display" + font-style:"italic". A real render (project 5mBgcXoQbvqO3LGB,
+# frame extracted via ffmpeg) showed the Google-Font-by-name path resolves
+# the correct family (Playfair Display's characteristic high-contrast serif
+# shapes are there) but ignores `font-style: italic` entirely -- text came
+# out upright, not slanted. Google Fonts ships this family as a SEPARATE
+# italic-only variable font file (no font-style switch needed once you're
+# pointed at it), from https://github.com/google/fonts
+# (ofl/playfairdisplay/PlayfairDisplay-Italic[wght].ttf) -- raw.githubusercontent.com
+# URL confirmed reachable (200, real TTF bytes) before wiring it in.
+# CONFIRMED via a real render (project 8d4ipJeC00fGtiuD, frame extracted with
+# ffmpeg): the accent phrase renders genuinely italic/slanted, not upright.
+HOOK_ACCENT_FONT_URL = (
+    "https://raw.githubusercontent.com/google/fonts/main/ofl/playfairdisplay/"
+    "PlayfairDisplay-Italic%5Bwght%5D.ttf"
 )
+HOOK_ACCENT_WEIGHT = 600
+HOOK_ACCENT_COLOR = "#FAE8A8"
+HOOK_ACCENT_SIZE = 100
+HOOK_MAIN_Y = 650  # upper-middle zone: clear of the top edge, far above SUBTITLE_Y
+HOOK_MAIN_HEIGHT = 120
+HOOK_ACCENT_Y = HOOK_MAIN_Y + HOOK_MAIN_HEIGHT
+HOOK_ACCENT_HEIGHT = 140
 
 # "Fundido cruzado" between every pair of adjacent scenes (hook->moment 1,
 # and moment N -> moment N+1). Confirmed by a real render that a scene's
@@ -315,6 +343,31 @@ def parse_orden_edicion(path: Path) -> list:
 
     moments.sort(key=lambda mm: mm.order)
     return moments
+
+
+# 'Momento gancho -- texto: "..."' (written by seleccion-clips-pexels when the
+# reel has a rewritten on-screen hook) never matches _MOMENT_HEADER_RE above
+# (no \d+), so parse_orden_edicion silently ignores it -- this needs its own
+# tiny parser instead of extending the numeric one.
+_HOOK_HEADER_RE = re.compile(r"^Momento\s+gancho\s*--.*$", re.MULTILINE)
+
+
+def parse_hook_clip(path: Path) -> Optional[Moment]:
+    """Return the hook's own Moment (order=0, reusing select_clip_for_moment
+    unchanged) if orden_edicion.txt has a 'Momento gancho' block, else None
+    -- older reels processed before this feature existed simply won't have
+    one, and the caller falls back to reusing moment 1's clip."""
+    text = path.read_text(encoding="utf-8-sig")
+    header = _HOOK_HEADER_RE.search(text)
+    if not header:
+        return None
+    # No second header to bound the block against (there's only ever one
+    # hook block) -- runs to the next 'Momento N --' header, or EOF.
+    next_header = _MOMENT_HEADER_RE.search(text, header.end())
+    block_end = next_header.start() if next_header else len(text)
+    block = text[header.end():block_end]
+    candidate_files = [cm.group(1) for cm in _CANDIDATE_RE.finditer(block)]
+    return Moment(order=0, label="gancho", guion_line="", candidate_files=candidate_files)
 
 
 def select_clip_for_moment(moment: Moment, clips_dir: Path) -> tuple:
@@ -487,27 +540,51 @@ def build_gradient_element(target_duration: float) -> dict:
     }
 
 
-def build_hook_html(main_text: str, accent_text: str) -> dict:
-    markup = HOOK_HTML_TEMPLATE.format(
-        width=CANVAS_WIDTH,
-        main_font=HOOK_MAIN_FONT, main_weight=HOOK_MAIN_WEIGHT,
-        main_color=HOOK_MAIN_COLOR, main_size=HOOK_MAIN_SIZE,
-        main_text=html.escape(main_text),
-        accent_font=HOOK_ACCENT_FONT, accent_color=HOOK_ACCENT_COLOR,
-        accent_size=HOOK_ACCENT_SIZE, accent_text=html.escape(accent_text),
-    )
-    return {
-        "type": "html",
-        "html": markup,
+def build_hook_text_elements(main_text: str, accent_text: str) -> list:
+    """Two native `type: "text"` elements (see the HOOK_* comment block above
+    for why this replaced a single `type: "html"` element -- only `text`
+    documents automatic Google-Font-by-name resolution)."""
+    main_element = {
+        "type": "text",
+        "text": main_text,
         "position": "custom",
         "x": 0,
-        "y": HOOK_Y,
+        "y": HOOK_MAIN_Y,
         "width": CANVAS_WIDTH,
-        "height": HOOK_BOX_HEIGHT,
+        "height": HOOK_MAIN_HEIGHT,
         "z-index": 10,
         "duration": HOOK_DURATION_S,
         "wait": 0.3,
+        "settings": {
+            "font-family": HOOK_MAIN_FONT,
+            "font-weight": str(HOOK_MAIN_WEIGHT),
+            "font-size": f"{HOOK_MAIN_SIZE}px",
+            "color": HOOK_MAIN_COLOR,
+            "text-align": "center",
+            "-webkit-text-stroke-width": HOOK_MAIN_STROKE_WIDTH,
+            "-webkit-text-stroke-color": HOOK_MAIN_STROKE_COLOR,
+        },
     }
+    accent_element = {
+        "type": "text",
+        "text": accent_text,
+        "position": "custom",
+        "x": 0,
+        "y": HOOK_ACCENT_Y,
+        "width": CANVAS_WIDTH,
+        "height": HOOK_ACCENT_HEIGHT,
+        "z-index": 10,
+        "duration": HOOK_DURATION_S,
+        "wait": 0.3,
+        "settings": {
+            "font-family": HOOK_ACCENT_FONT_URL,
+            "font-weight": str(HOOK_ACCENT_WEIGHT),
+            "font-size": f"{HOOK_ACCENT_SIZE}px",
+            "color": HOOK_ACCENT_COLOR,
+            "text-align": "center",
+        },
+    }
+    return [main_element, accent_element]
 
 
 def build_hook_scene(clip_url: str, clip_duration: Optional[float],
@@ -531,7 +608,7 @@ def build_hook_scene(clip_url: str, clip_duration: Optional[float],
         "elements": [
             video_element,
             build_gradient_element(HOOK_DURATION_S),
-            build_hook_html(main_text, accent_text),
+            *build_hook_text_elements(main_text, accent_text),
         ]
     }
 
@@ -595,6 +672,8 @@ def build_movie(scenes: list, narration_url: str, narration_start: float,
         "model": "whisper",
         "settings": {
             "style": "classic-progressive",
+            "font-family": SUBTITLE_FONT,
+            "font-weight": SUBTITLE_FONT_WEIGHT,
             "word-color": SUBTITLE_WORD_COLOR,
             "line-color": SUBTITLE_LINE_COLOR,
             "all-caps": False,
@@ -671,8 +750,8 @@ def main() -> int:
     parser.add_argument("reel_slug", help="Nombre/slug del reel (define que carpetas de origen y de salida usar)")
     parser.add_argument("--music", default=None, help="Ruta a un archivo local de musica de fondo (opcional)")
     parser.add_argument("--quality", default="high", choices=["low", "medium", "high"], help="Calidad de render (default: high)")
-    parser.add_argument("--hook-main", default=None, help="Frase principal del gancho (blanco, Poppins bold). Requiere --hook-accent.")
-    parser.add_argument("--hook-accent", default=None, help="Frase de acento del gancho (dorado, Playfair Display italic). Requiere --hook-main.")
+    parser.add_argument("--hook-main", default=None, help="Frase principal del gancho (amarillo/naranja #F2A900, Poppins bold). Requiere --hook-accent.")
+    parser.add_argument("--hook-accent", default=None, help="Frase de acento del gancho (dorado palido #FAE8A8, Playfair Display italic). Requiere --hook-main.")
     parser.add_argument("--clips-dir", default=str(DEFAULT_CLIPS_DIR), help="Carpeta base de clips (default: scripts/output_clips)")
     parser.add_argument("--audio-dir", default=str(DEFAULT_AUDIO_DIR), help="Carpeta base de audio (default: scripts/output_audio)")
     parser.add_argument("--out-dir", default=str(DEFAULT_OUTPUT_DIR), help="Carpeta base de salida (default: scripts/output_reels)")
@@ -704,6 +783,26 @@ def main() -> int:
 
         moments = parse_orden_edicion(orden_path)
         print(f"{len(moments)} momentos encontrados en orden_edicion.txt")
+
+        # Dedicated hook clip (seleccion-clips-pexels' 'Momento gancho' block,
+        # searched against the hook's OWN text instead of moment 1's guion
+        # line). Falls back to reusing moment 1's clip -- exactly like before
+        # this feature existed -- when the block is missing (older reels, or
+        # a hook improvised at render time without re-running clip search).
+        hook_clip_path = None
+        hook_clip_is_photo = False
+        hook_clip_duration = None
+        if has_hook:
+            hook_moment = parse_hook_clip(orden_path)
+            if hook_moment and hook_moment.candidate_files:
+                hook_clip_path, hook_clip_is_photo = select_clip_for_moment(hook_moment, clips_dir)
+                hook_clip_duration = None if hook_clip_is_photo else ffprobe_duration_seconds(hook_clip_path)
+                print(f"Clip del gancho (dedicado): {hook_clip_path.name}")
+            else:
+                print(
+                    "Clip del gancho: sin bloque 'Momento gancho' en orden_edicion.txt -- "
+                    "se reusara el clip de momento 1 (comportamiento anterior a esta funcion)."
+                )
 
         selected = []
         for m in moments:
@@ -761,6 +860,12 @@ def main() -> int:
         else:
             print("  (sin musica de fondo -- no se paso --music)")
 
+        hook_clip_url = None
+        if hook_clip_path is not None:
+            hook_dest_name = f"{args.reel_slug}_gancho_{hook_clip_path.name}"
+            hook_clip_url = upload_asset(hook_clip_path, hook_dest_name, api_key)
+            uploaded_names.append(hook_dest_name)
+
         scenes = []
         first_clip_url = None
         first_clip_duration = None
@@ -777,8 +882,14 @@ def main() -> int:
             scenes.append(build_scene(m, clip_url, is_photo, target, clip_duration, i, transition_duration))
 
         if has_hook:
+            if hook_clip_url is not None:
+                chosen_hook_clip_url, chosen_hook_clip_duration = hook_clip_url, hook_clip_duration
+                print(f"Gancho: usando su propio clip ({hook_clip_path.name}), distinto del de momento 1 ({selected[0][1].name}).")
+            else:
+                chosen_hook_clip_url, chosen_hook_clip_duration = first_clip_url, first_clip_duration
+                print(f"Gancho: reusando el clip de momento 1 ({selected[0][1].name}) -- sin clip dedicado.")
             print(f"Gancho: \"{args.hook_main}\" / \"{args.hook_accent}\" ({HOOK_DURATION_S}s antes de la narracion)")
-            scenes.insert(0, build_hook_scene(first_clip_url, first_clip_duration, args.hook_main, args.hook_accent))
+            scenes.insert(0, build_hook_scene(chosen_hook_clip_url, chosen_hook_clip_duration, args.hook_main, args.hook_accent))
 
         narration_start = HOOK_DURATION_S if has_hook else 0
         movie = build_movie(scenes, narration_url, narration_start, music_url, args.quality)

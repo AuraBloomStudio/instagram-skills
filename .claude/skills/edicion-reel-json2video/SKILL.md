@@ -1,6 +1,6 @@
 ---
 name: edicion-reel-json2video
-description: Arma el video final de un reel de Constelaciones Familiares con la API de JSON2Video, a partir de los clips de B-roll y el orden_edicion.txt de seleccion-clips-pexels mas la narracion.mp3 de narracion-voz-gemini, ya guardados con el mismo slug del reel. Ordena las escenas segun orden_edicion.txt (un clip por momento, prefiriendo video sobre foto entre los 1-3 candidatos de cada uno), reparte la duracion total de la narracion entre los momentos en proporcion a las palabras de cada linea del guion, sube todo a JSON2Video (clips, narracion y musica de fondo opcional) porque la API solo acepta URLs publicas, genera subtitulos automaticos nativos en espanol via Whisper posicionados en la zona media-baja del encuadre (no pegados al fondo), todo el texto en un solo color dorado de marca (sin contraste blanco/dorado en la palabra activa), con un degradado oscuro fuerte que cubre todo el cuadro de arriba a abajo (confirmado visible incluso en el frame mas claro del video), agrega una transicion de fundido cruzado de 0.4s entre cada momento (incluido el gancho, si lo hay) en vez de cortes secos, opcionalmente arma un gancho inicial de 2s antes de que empiece la narracion (titular grande a dos fuentes -- Poppins bold en crema de marca + Playfair Display italic dorado -- sobre el primer clip), mezcla una pista de musica de fondo en volumen bajo si el usuario pasa un archivo (no hay musica de stock integrada en JSON2Video), renderiza en vertical 9:16 (instagram-story, 1080x1920) y descarga el resultado a scripts/output_reels/<slug>/reel_final.mp4. Usar para "arma el reel final de [tema]", "edita el video con los clips y la narracion", "renderiza el reel". Not for writing the script (write it first), not for selecting B-roll clips (use seleccion-clips-pexels), and not for generating the narration audio (use narracion-voz-gemini) -- this skill only assembles what those two already produced.
+description: Arma el video final de un reel de Constelaciones Familiares con la API de JSON2Video, a partir de los clips de B-roll y el orden_edicion.txt de seleccion-clips-pexels mas la narracion.mp3 de narracion-voz-gemini, ya guardados con el mismo slug del reel. Ordena las escenas segun orden_edicion.txt (un clip por momento, prefiriendo video sobre foto entre los 1-3 candidatos de cada uno), reparte la duracion total de la narracion entre los momentos en proporcion a las palabras de cada linea del guion, sube todo a JSON2Video (clips, narracion y musica de fondo opcional) porque la API solo acepta URLs publicas, genera subtitulos automaticos nativos en espanol via Whisper en Poppins, posicionados en la zona media-baja del encuadre (no pegados al fondo), en un solo color cian vivo (sin contraste entre la palabra activa y el resto de la linea), con un degradado oscuro fuerte que cubre todo el cuadro de arriba a abajo (confirmado visible incluso en el frame mas claro del video), agrega una transicion de fundido cruzado de 0.4s entre cada momento (incluido el gancho, si lo hay) en vez de cortes secos, opcionalmente arma un gancho inicial de 2s antes de que empiece la narracion (titular grande a dos fuentes -- Poppins bold amarillo/naranja de marca + Playfair Display italic dorado palido, mismos colores que los titulos de los posts estaticos -- como dos elementos `text` nativos de JSON2Video, no un elemento `html`, sobre su propio clip de fondo si seleccion-clips-pexels genero uno dedicado para el texto del gancho, o reciclando el clip de momento 1 si no), mezcla una pista de musica de fondo en volumen bajo si el usuario pasa un archivo (no hay musica de stock integrada en JSON2Video), renderiza en vertical 9:16 (instagram-story, 1080x1920) y descarga el resultado a scripts/output_reels/<slug>/reel_final.mp4. Usar para "arma el reel final de [tema]", "edita el video con los clips y la narracion", "renderiza el reel". Not for writing the script (write it first), not for selecting B-roll clips (use seleccion-clips-pexels), and not for generating the narration audio (use narracion-voz-gemini) -- this skill only assembles what those two already produced.
 ---
 
 # Edicion del reel final (JSON2Video)
@@ -39,13 +39,15 @@ narracion y subtitulos -- nunca se bloquea el render por falta de musica.
 **Subtitulos:** son nativos de JSON2Video (`type: "subtitles"`), transcriben
 automaticamente el audio de la narracion con el modelo Whisper en espanol --
 no hace falta pasar un guion de texto por separado. Estilo confirmado por
-prueba real: `classic-progressive` (revela palabra por palabra). Color
-**unico**, `#B8985E` (Dorado de marca, de `BRAND_COLORS` en
-`image_prompt_style.md`), para `word-color` y `line-color` por igual -- una
-version anterior usaba blanco para la linea y dorado solo para la palabra
-activa, pero el usuario pidio un solo color sin ese contraste. La revelacion
-progresiva palabra por palabra se mantiene, solo que ya no cambia de color al
-hacerlo.
+prueba real: `classic-progressive` (revela palabra por palabra). Fuente
+`Poppins` (`font-family` en `settings`; antes no se especificaba y caia al
+default `Arial` de JSON2Video). Color **unico**, `#22D3EE` (cian vivo,
+aprobado tras un mockup local -- reemplaza al dorado `#B8985E` que se usaba
+antes), para `word-color` y `line-color` por igual -- una version anterior
+usaba blanco para la linea y un color solo para la palabra activa, pero el
+usuario pidio un solo color sin ese contraste; esa decision se mantiene, solo
+cambio el color en si. La revelacion progresiva palabra por palabra se
+mantiene, solo que no cambia de color al hacerlo.
 
 **Posicion de subtitulos (regla dura, no preguntar):** `position: "custom"`
 con `x=540, y=1150` sobre el canvas de 1080x1920 (`SUBTITLE_X`/`SUBTITLE_Y`
@@ -136,26 +138,58 @@ probarlo con un render real primero.
 si el usuario pide un gancho, la skill dibuja/confirma el texto ANTES de
 llamar al script (ver Flujo, paso 3) y lo pasa via `--hook-main` /
 `--hook-accent`. El script arma una escena inicial de `HOOK_DURATION_S`
-(2.0s, fijo) usando el primer clip del reel (mudo, reciclado -- ya se sube
-para el momento 1 de todas formas), con el mismo degradado de cuadro
-completo detras, y el titular encima:
-- `--hook-main`: frase principal, Poppins bold 88px, en `#E3D5BF` (Crema/
-  beige de marca, de `BRAND_COLORS`) -- version corregida tras el primer
-  render, donde iba en blanco puro y el usuario lo pidio en un color de
-  marca, no blanco.
-- `--hook-accent`: frase de acento, Playfair Display italic 100px, dorado de
-  marca (`#B8985E`).
-Confirmado por prueba real que ambas fuentes (Google Fonts) renderizan
-correctamente sin necesitar un `@import` -- JSON2Video ya las resuelve por
-nombre dentro del elemento `html`. El gancho se coloca en `y=650` (zona
-media-alta), lejos tanto del borde superior como de `SUBTITLE_Y=1150`, asi
-que nunca se superpone con el subtitulo de la narracion -- ademas nunca hay
-solape de *tiempo*: la narracion arranca recien en `start:
-HOOK_DURATION_S` (el audio se corre, no se reproduce en paralelo al gancho),
-y los subtitulos solo transcriben audio real, asi que no aparece texto de
-narracion durante el gancho. Si el usuario no pide gancho, no pasar
-`--hook-main`/`--hook-accent` y el reel arranca directo en el momento 1,
-como antes.
+(2.0s, fijo), con el mismo degradado de cuadro completo detras, y el
+titular encima:
+- **Clip de fondo del gancho**: si `seleccion-clips-pexels` genero un clip
+  dedicado para el gancho (bloque `Momento gancho` en `orden_edicion.txt`,
+  buscado por el texto del gancho, no por la `guion_line` del momento 1),
+  `parse_hook_clip()` lo usa -- distinto del clip de momento 1, subido aparte
+  a JSON2Video. Si ese bloque no existe (reels procesados antes de esta
+  funcion, o un gancho improvisado sin volver a correr la busqueda de
+  clips), cae de vuelta a reusar el clip de momento 1 (mudo, reciclado --
+  comportamiento identico al de antes de esta funcion). El script imprime
+  explicitamente cual de los dos casos aplico y que archivo uso, antes de
+  subir nada.
+- `--hook-main`: frase principal, Poppins bold 88px, en `#F2A900` (amarillo/
+  naranja vivo -- mismo color que el titular de los posts estaticos en
+  `canva_title_style.md`). Lleva ademas un `-webkit-text-stroke` solido de
+  3px en `#1C1208` (contorno duro, sin blur) para mantener contraste cuando
+  el clip de fondo tiene una zona clara (ej. una ventana) detras del texto --
+  confirmado con un mockup local Y con un frame real extraido de un render
+  (proyecto `5mBgcXoQbvqO3LGB`).
+- `--hook-accent`: frase de acento, Playfair Display italic 100px, dorado
+  palido (`#FAE8A8` -- mismo color que la linea de cierre de los posts
+  estaticos).
+**Los dos son elementos `type: "text"` nativos de JSON2Video, NO un elemento
+`html` con CSS inline.** Una version anterior usaba un solo elemento `html`
+con `font-family` en un `<span>` y un comentario que decia "JSON2Video ya
+resuelve Poppins/Playfair por nombre, sin @import" -- eso nunca se verifico
+contra un render real y resulto ser falso: un frame extraido de un render
+real mostro un sans generico, no Poppins. La resolucion automatica de Google
+Fonts por nombre (sin @import) esta documentada por JSON2Video **solo para
+el elemento `text`** (y, aparte, para `subtitles`) -- el elemento `html` no
+la menciona en ningun lado de su documentacion. Por eso el gancho ahora usa
+dos elementos `text` apilados via `y` custom (`HOOK_MAIN_Y=650` /
+`HOOK_ACCENT_Y` justo debajo), en vez de un solo `html` con dos `<span>`.
+
+**Segunda vuelta de este mismo problema:** el primer render real con los dos
+elementos `text` confirmo Poppins + color + contorno del titular principal
+correctos, pero mostro la frase de acento en Playfair Display **derecho, sin
+italica** -- `"font-style": "italic"` en `settings` no se aplico. Cambiado a
+apuntar `font-family` directo a la URL publica del archivo TTF italico de
+Playfair Display (`HOOK_ACCENT_FONT_URL`, del repo `google/fonts` en
+GitHub) en vez de depender de `font-family` por nombre + `font-style`.
+**Confirmado con un render real** (proyecto `8d4ipJeC00fGtiuD`, frame
+extraido con ffmpeg): la frase de acento sale genuinamente italica/inclinada.
+
+El gancho se coloca lejos tanto del borde superior como de
+`SUBTITLE_Y=1150`, asi que nunca se superpone con el subtitulo de la
+narracion -- ademas nunca hay solape de *tiempo*: la narracion arranca
+recien en `start: HOOK_DURATION_S` (el audio se corre, no se reproduce en
+paralelo al gancho), y los subtitulos solo transcriben audio real, asi que
+no aparece texto de narracion durante el gancho. Si el usuario no pide
+gancho, no pasar `--hook-main`/`--hook-accent` y el reel arranca directo en
+el momento 1, como antes.
 
 **Seleccion de clip por momento:** `orden_edicion.txt` normalmente trae 2-3
 candidatos por momento (`_a`, `_b`, `_c`). El script toma automaticamente el
@@ -299,9 +333,14 @@ carpeta por separado antes de fallar.
   `narracion-voz-gemini`).
 - `scripts/output_reels/` -- reels finales renderizados (gitignored, son
   binarios, no se suben al repo).
-- `../../scripts/references/image_prompt_style.md` -- `BRAND_COLORS`, de
-  donde sale el Dorado (#B8985E) usado como color de palabra activa en los
-  subtitulos y en la frase de acento del gancho.
+- `../../scripts/references/image_prompt_style.md` -- `BRAND_COLORS`, la
+  paleta general de marca (ya no la fuente de los colores del gancho/
+  subtitulos, ver siguiente).
+- `../../scripts/references/canva_title_style.md` -- fuente de verdad de los
+  colores del titular del gancho (`#F2A900` / `#FAE8A8`), compartidos con el
+  titulo de los posts estaticos. El color cian de los subtitulos (`#22D3EE`)
+  es especifico de los reels y vive solo en `SUBTITLE_WORD_COLOR` en el
+  script, no en este archivo.
 
 ## Related skills
 

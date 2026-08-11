@@ -109,6 +109,12 @@ SOLITUDE_WORDS_RE = re.compile(
     r"\b(alone|solo|by herself|standing alone|sitting alone)\b", re.IGNORECASE
 )
 
+# The hook clip (background behind the rewritten on-screen headline, when the
+# reel has one) is a separate pseudo-moment, not one of the 6-8 narrated
+# beats -- "00" so it sorts before "01" in a plain file listing.
+HOOK_LABEL = "gancho"
+HOOK_FILE_PREFIX = "00_gancho"
+
 TIER_LABELS = {
     "accompanied": "⚠ protagonista principal, acompañada",
     "cutaway": "ℹ imagen de apoyo (sin rostro)",
@@ -175,6 +181,12 @@ def load_moments(json_path: Path) -> dict:
         print(
             f"Aviso: se esperaban 6-8 momentos, el archivo trae {len(data['moments'])}. "
             "Se continúa igual."
+        )
+    hook = data.get("hook")
+    if hook is not None and not hook.get("search_terms"):
+        raise ClipSearchError(
+            f"{json_path}: 'hook' debe traer 'search_terms' (2-3 términos en "
+            "inglés específicos del texto del gancho) si la clave está presente."
         )
     return data
 
@@ -390,6 +402,52 @@ def download_file(url: str, dest: Path) -> None:
             fh.write(chunk)
 
 
+def resolve_and_download_hook(
+    hook: dict, protagonist_id: int, protagonist_name: str, api_key: str,
+    out_dir: Path, used_keys: set, candidates_per_moment: int,
+) -> str:
+    """Same 4-tier cascade + scoring + download as a regular moment (see
+    resolve_moment_candidates/score_candidate), but for the reel's optional
+    rewritten-headline hook instead of a narrated beat -- separate pseudo-
+    moment, own file prefix, own block in orden_edicion.txt, never mixed
+    into 'Momento 01'. Shares `used_keys` with the moments loop so the hook
+    clip and a narration clip can never end up being the exact same
+    Pexels file (global dedup rule, same as between any two moments)."""
+    print(f"Buscando clip del gancho -- solo {protagonist_name}...")
+    candidates, tier = resolve_moment_candidates(hook, protagonist_id, api_key)
+    available = {k: c for k, c in candidates.items() if k not in used_keys}
+    ranked = sorted(available.values(), key=score_candidate)
+    chosen = ranked[:candidates_per_moment]
+    for candidate in chosen:
+        used_keys.add(candidate["key"])
+
+    lines = [f'Momento {HOOK_LABEL} -- texto: "{hook["text"]}"']
+    lines.append(f"  Términos usados: {', '.join(hook['search_terms'])}")
+    if tier and tier != "different_protagonist":
+        lines.append(f"  {TIER_LABELS[tier]}")
+    elif tier == "different_protagonist":
+        lines.append(f"  {TIER_LABELS[tier]} -- clip del gancho")
+
+    if not chosen:
+        lines.append("  Sin clips disponibles -- buscar manualmente.")
+        print("  Sin candidatos utilizables para el clip del gancho.")
+        return "\n".join(lines)
+
+    variant_letters = "abcdefghijklmnopqrstuvwxyz"
+    for idx, candidate in enumerate(chosen):
+        variant = variant_letters[idx]
+        ext = "mp4" if candidate["type"] == "video" else "jpg"
+        filename = f"{HOOK_FILE_PREFIX}_{variant}.{ext}"
+        dest = out_dir / filename
+        print(f"  Descargando {filename} (autor: {candidate['author_name']}, tipo: {candidate['type']})...")
+        download_file(candidate["file_url"], dest)
+        type_note = "" if candidate["type"] == "video" else " [FOTO -- animar o usar como imagen fija]"
+        lines.append(
+            f"  {filename} -- autor: {candidate['author_name']}{type_note} -- {candidate['pexels_url']}"
+        )
+    return "\n".join(lines)
+
+
 def _extract_used_keys(summary_text: str) -> set:
     keys = set()
     for kind, num in re.findall(r"/(video|photo)/[\w-]*-(\d+)/", summary_text):
@@ -399,7 +457,9 @@ def _extract_used_keys(summary_text: str) -> set:
 
 def _merge_moment_blocks(existing_text: str, new_blocks: dict) -> str:
     """Replace only the 'Momento NN -- ...' blocks present in new_blocks;
-    leave everything else (header, untouched moments) exactly as-is."""
+    leave everything else (header, untouched moments, the hook block if any)
+    exactly as-is. The hook block's header ('Momento gancho -- ...') never
+    matches \\d+ here on purpose, so it always falls through untouched."""
     blocks = existing_text.strip("\n").split("\n\n")
     merged = []
     for block in blocks:
@@ -409,6 +469,38 @@ def _merge_moment_blocks(existing_text: str, new_blocks: dict) -> str:
         else:
             merged.append(block)
     return "\n\n".join(merged) + "\n"
+
+
+def _merge_hook_block(existing_text: str, hook_block: str) -> str:
+    """Always REMOVE any existing 'Momento gancho -- ...' block first, then
+    (re)insert the new one right before the first 'Momento N -- ...' block --
+    never an in-place update at whatever index it happened to already be at.
+    Mirrors _merge_moment_blocks but for the single non-numeric hook block,
+    which that function never touches.
+
+    First version only replaced-in-place when a hook block already existed,
+    which just re-wrote its content at its EXISTING (possibly wrong)
+    position instead of relocating it -- confirmed broken on a real re-run:
+    a hook block already misplaced after 'Momento 02' (see the position bug
+    below) stayed misplaced after "fixing" the position bug, because the
+    replace path never repositions.
+
+    Position bug this also fixes: finds the header/first-moment boundary by
+    CONTENT (first block matching 'Momento \\d+ --'), not by a fixed block
+    count -- a fixed index (e.g. "the header is always 3 blocks") broke on a
+    real reel whose orden_edicion.txt had been hand-edited per this skill's
+    own step 6 (a 'Nota: ...' paragraph appended straight after the
+    protagonist line, no blank line), collapsing what the script normally
+    writes as 3 separate header blocks into 1."""
+    blocks = existing_text.strip("\n").split("\n\n")
+    hook_prefix = f"Momento {HOOK_LABEL} --"
+    blocks = [b for b in blocks if not b.startswith(hook_prefix)]
+    insert_at = next(
+        (i for i, block in enumerate(blocks) if re.match(r"Momento (\d+) --", block)),
+        len(blocks),
+    )
+    blocks.insert(insert_at, hook_block.rstrip("\n"))
+    return "\n\n".join(blocks) + "\n"
 
 
 def main() -> int:
@@ -441,12 +533,24 @@ def main() -> int:
         "--protagonist-name",
         help="Nombre a mostrar del protagonista cuando se usa --protagonist-id.",
     )
+    parser.add_argument(
+        "--hook-only",
+        action="store_true",
+        help="Procesar SOLO el clip del gancho (requiere 'hook' en el JSON), sin "
+        "tocar los 6-8 momentos narrados -- hace merge en orden_edicion.txt igual "
+        "que --only. Se puede combinar con --only para re-testear ambos a la vez.",
+    )
     args = parser.parse_args()
     if bool(args.protagonist_id) != bool(args.protagonist_name):
         raise ClipSearchError("--protagonist-id y --protagonist-name van juntos.")
 
     api_key = ensure_pexels_api_key()
     data = load_moments(Path(args.json_path))
+    if args.hook_only and not data.get("hook"):
+        raise ClipSearchError(
+            "--hook-only requiere la clave 'hook' en el JSON (con al menos 'text' y "
+            "'search_terms')."
+        )
     reel_slug = slugify(data["reel_name"])
     out_dir = Path(args.output_dir) / reel_slug
     summary_path = out_dir / "orden_edicion.txt"
@@ -454,9 +558,13 @@ def main() -> int:
     only_orders = None
     if args.only:
         only_orders = {int(x) for x in args.only.split(",")}
-    moments_to_process = [m for m in data["moments"] if only_orders is None or m["order"] in only_orders]
-    if not moments_to_process:
-        raise ClipSearchError(f"--only {args.only} no coincide con ningún momento del JSON.")
+
+    if args.hook_only and only_orders is None:
+        moments_to_process = []  # solo el gancho, ningun momento numerado
+    else:
+        moments_to_process = [m for m in data["moments"] if only_orders is None or m["order"] in only_orders]
+        if not moments_to_process:
+            raise ClipSearchError(f"--only {args.only} no coincide con ningún momento del JSON.")
 
     if args.protagonist_id:
         protagonist = {
@@ -469,11 +577,25 @@ def main() -> int:
     else:
         protagonist = pick_protagonist(data["general_terms"], data["moments"], api_key)
 
+    merge_mode = (only_orders is not None or args.hook_only) and summary_path.exists()
     used_keys: set = set()
-    if only_orders is not None and summary_path.exists():
+    if merge_mode:
         used_keys = _extract_used_keys(summary_path.read_text(encoding="utf-8"))
 
     variant_letters = "abcdefghijklmnopqrstuvwxyz"
+
+    # Hook clip (optional, separate from the 6-8 narrated moments): only
+    # processed on a default full run (no --only/--hook-only) or when
+    # explicitly requested via --hook-only. Shares used_keys with the
+    # moments loop below either way, so it can never end up downloading the
+    # exact same Pexels file as a narration clip.
+    should_process_hook = bool(data.get("hook")) and (args.hook_only or only_orders is None)
+    hook_block = None
+    if should_process_hook:
+        hook_block = resolve_and_download_hook(
+            data["hook"], protagonist["author_id"], protagonist["author_name"],
+            api_key, out_dir, used_keys, args.candidates_per_moment,
+        )
 
     # Pass 1: resolve each moment's candidate pool through the tier cascade.
     moment_pools = []
@@ -535,9 +657,13 @@ def main() -> int:
         new_blocks[moment["order"]] = "\n".join(lines)
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    if only_orders is not None and summary_path.exists():
-        merged_text = _merge_moment_blocks(summary_path.read_text(encoding="utf-8"), new_blocks)
-        summary_path.write_text(merged_text, encoding="utf-8")
+    if merge_mode:
+        text = summary_path.read_text(encoding="utf-8")
+        if new_blocks:
+            text = _merge_moment_blocks(text, new_blocks)
+        if hook_block is not None:
+            text = _merge_hook_block(text, hook_block)
+        summary_path.write_text(text, encoding="utf-8")
     else:
         header = [
             f"Orden de edición -- {data['reel_name']}",
@@ -550,6 +676,8 @@ def main() -> int:
             ),
         ]
         all_blocks = [header[0], header[1], header[2]]
+        if hook_block is not None:
+            all_blocks.append(hook_block)
         for moment in data["moments"]:
             if moment["order"] in new_blocks:
                 all_blocks.append(new_blocks[moment["order"]])
