@@ -31,10 +31,19 @@ def copy_path(src: Path, dest: Path) -> None:
     if src.is_dir():
         ignore = shutil.ignore_patterns("__pycache__", "*.pyc")
         if src.name == "scripts":
+            # Mirrors the root .gitignore entries for scripts/output_* --
+            # those patterns have a mid-string slash, so git only matches
+            # them at the repo root and never reaches this nested copy.
+            # Without excluding them here too, a sync after a real reel/post
+            # has been generated locally copies actual user media (audio,
+            # video, downloaded stock photos) into a path nothing gitignores.
             ignore = shutil.ignore_patterns(
                 "__pycache__",
                 "*.pyc",
                 "sync_codex_marketplace.py",
+                "output_clips",
+                "output_audio",
+                "output_reels",
             )
         shutil.copytree(src, dest, ignore=ignore)
     else:
