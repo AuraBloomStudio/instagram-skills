@@ -44,6 +44,39 @@ unaffected by this file.
   it never overlaps the protagonist's face or hair — do not paste the same
   pixel offset onto every post without checking.
 
+## CARROUSEL_BAKED_TYPOGRAPHY (carrusel-constelaciones only, automated, no Canva step)
+
+`carrusel-constelaciones` no longer uses the manual `TITLE_TYPOGRAPHY` spec
+above at all -- every slide's text is baked automatically with Pillow via
+`generate_post_image.py`'s `render_headline` (see that script and
+`constelaciones_brand_voice.md`'s "Design mix" rule). Its typography is
+deliberately **Poppins**, not Anton/Oswald, so carousels and reels
+(`render_reel_json2video.py`'s hook text) read as one brand system instead of
+two different ones:
+
+- **Título** (main headline, every slide): Poppins Bold, `#F2A900`, same
+  color as the manual spec above but a different font family on purpose.
+- **Subtítulo** (accent line, every slide that has one): Playfair Display
+  italic, `#FAE8A8` -- identical to the manual spec and to the reel hook's
+  accent line (`HOOK_ACCENT_FONT_URL` in `render_reel_json2video.py`).
+- **Hook (slide 1) only:** a third short line below título/subtítulo,
+  Poppins SemiBold, same pale gold `#FAE8A8` as the subtitle so it doesn't
+  compete in hierarchy with the main headline.
+- **Content slides + "Para asentar" only:** the full microdolor paragraph,
+  baked separately as its own block -- Poppins Bold, cyan `#22D3EE` (same
+  color as the reel narration subtitles), with a full-frame dark gradient
+  scrim behind it (same stops as `GRADIENT_HTML_TEMPLATE` in
+  `render_reel_json2video.py`) for contrast over an uncontrolled real Pexels
+  photo. Never combined with the hook's third line on the same slide.
+- **CTA (slide 6) only:** título + subtítulo, no third block -- the CTA's
+  weight comes from the bridge sentence itself (see
+  `constelaciones_brand_voice.md`), not from an extra text tier.
+- **Placement:** automatic, not manual -- a face-safe zone (OpenCV veto,
+  since a real Pexels photo has no requested composition to trust
+  deterministically) picks the top or bottom band of the frame; the content-
+  slide body block gets a wider band (`BODY_BAND_FRACTION`) since a full
+  paragraph needs more room than a short headline.
+
 ## Reference render
 
 `canva_title_style_example.png` (same folder) is the approved 2026-08-10

@@ -12,6 +12,15 @@ This file governs COPY only. Background-photo style lives in
 
 ## Voice fingerprint
 
+- **Language: español neutro colombiano, always.** Every text this pipeline
+  produces -- títulos, subtítulos, copy de slide, CTA, captions -- is in
+  neutral Colombian Spanish. **Never voseo** ("vos", "cargás", "sos", "tenés")
+  and never modismos tied to another country (Mexican, Rioplatense, Chilean,
+  etc.). This has been violated in practice (a real carousel draft mixed "tú"
+  conjugations with voseo mid-piece -- "ves" next to "abrís/apagás/quedás" --
+  an inconsistency that should never reach a draft). If a draft slips into
+  voseo or another region's modismos, that is a defect to fix before
+  approval, not a stylistic variant.
 - **Address: "tú".** The body speaks directly to the reader in second person
   throughout.
 - **Exception: the contrast couplet shifts to third person.** Whenever the
@@ -47,14 +56,20 @@ skip "Para asentar," the book CTA, and hashtags entirely; see
     on-image text of the **second-to-last slide** — a visual closer meant to
     earn the save. The last slide is the CTA slide (see below). It is never
     duplicated in the caption.
-- **Bridge required before the CTA.** Naming the pain is not enough: between
-  the reframe and the link there must be an explicit sentence stating that a
-  way out exists and that Diana's book/process is that way out. Don't just
-  name the wound and then drop the link with no connective sentence. Example:
-  "Esto no se queda así: hay un camino para soltar esta carga, y en mi libro
-  te lo muestro paso a paso." Applies to both `post-constelaciones` (as a
-  sentence right before the link) and `carrusel-constelaciones` (as the text
-  of the dedicated CTA slide, see `CAROUSEL_STRUCTURES`).
+- **Bridge required before the CTA, with real weight and an explicit
+  callback.** A single generic sentence ("hay un camino, en mi libro te lo
+  muestro") is not enough on its own -- the bridge has to name the SPECIFIC
+  pain this exact piece developed (echo a concrete image or phrase from the
+  body, the same way "Para asentar" already has to echo the body per the
+  slide-to-slide connective-flow rule in `CAROUSEL_STRUCTURES`), not a
+  reusable formula that could sit at the bottom of any post. Give it real
+  body -- 2-3 sentences building from that specific pain into the offer, not
+  one thin clause -- before naming the book. Example shape: name the
+  recurring pattern this piece just walked through -> state plainly that it
+  doesn't have to keep repeating -> THEN mention the book as the way through
+  it. Applies to both `post-constelaciones` (right before the link) and
+  `carrusel-constelaciones` (the text of the dedicated CTA slide, see
+  `CAROUSEL_STRUCTURES`).
 - **CTA:** one natural mention of the book *El dolor que no te pertenece*
   plus the plain URL `https://eldolorquenotepertenece.com` — no UTM
   parameters, no shortened link, no more than this one link.
@@ -139,12 +154,47 @@ Do this for every transition, including into "Para asentar" and into the CTA
 slide -- the affirmation should echo a word or image from the body, and the
 CTA should pick up from what "Para asentar" just resolved.
 
-**Design mix (fixed, not random):** slide 1 (hook) and the last slide (CTA)
-use the flat-color "quote card" treatment from `BRAND_COLORS` in
-`image_prompt_style.md` -- no photo, no Gemini call, text is the whole
-design. Every other slide, including "Para asentar," uses a generated photo
-background. This mix repeats on every carousel; it is not optional or
-randomized per slide.
+**Design mix (fixed, not random):** only the last slide (CTA) uses the
+flat-color "quote card" treatment from `BRAND_COLORS` in
+`image_prompt_style.md` -- no photo, text is the whole design. **Every other
+slide, including the hook and "Para asentar," carries a real Pexels photo**
+background (see "Photo sourcing: Pexels, not Gemini" below) -- the hook
+stopped being a bare quote card because it's the single most important slide
+for stopping the scroll. This mix repeats on every carousel; it is not
+optional or randomized per slide. Baked text per slide type (all via
+`generate_post_image.py`'s `render_headline`, Poppins Bold `#F2A900` title +
+Playfair Display italic `#FAE8A8` subtitle on every slide that has one):
+- **Hook (slide 1):** título + subtítulo + a third short line
+  (`--headline-extra`, Poppins SemiBold, same pale gold as the subtitle).
+- **Content slides + "Para asentar"** (every slide between the hook and the
+  CTA): título + subtítulo, PLUS the slide's full microdolor paragraph baked
+  separately as `--body-text` -- Poppins Bold, cyan `#22D3EE` (same color as
+  the reel narration subtitles), with a dark gradient scrim behind it for
+  contrast (same stops as `render_reel_json2video.py`'s
+  `GRADIENT_HTML_TEMPLATE`). This is new text on the image, not just a
+  distilled headline -- the reader should be able to read the actual
+  microdolor without opening the caption.
+- **CTA (slide 6, flat-color):** título + subtítulo only, no cyan block --
+  the bridge already gets its own longer, higher-weight text per the
+  strengthened bridge rule above; a third text block there would compete
+  with it.
+
+**Photo sourcing: Pexels, not Gemini.** Every photo slide (hook + content +
+Para asentar) is a real stock photo from Pexels, sourced with the exact same
+protagonist-consistency cascade `seleccion-clips-pexels` already uses for
+reels (solo -> accompanied -> cutaway -> different author -> approximate),
+reused by import in `scripts/search_pexels_photo.py` rather than
+duplicated. Gemini is not called at all for this skill's photos --
+`post-constelaciones`, `imagen-post-constelaciones`, and
+`historias-constelaciones` are unaffected and keep generating with Gemini as
+before; this is scoped to `carrusel-constelaciones` only. Search-term writing
+follows the same candid, non-posed vocabulary `seleccion-clips-pexels`
+already uses (real domestic scenes, never "business woman smiling at
+camera"), not `image_prompt_style.md`'s Gemini-specific
+composition/anonymity rules, which don't apply to a real licensed stock
+photo. A mandatory visual review (same discipline as `seleccion-clips-pexels`,
+adapted for stills) happens before any slide is shown to the user -- see
+`carrusel-constelaciones/SKILL.md`.
 
 **First content slide carries the strongest pain (mandatory).** Slide 2 (the
 first slide after the hook) is the first real swipe -- if it doesn't land
@@ -167,6 +217,17 @@ to be the warm-up. What this means per structure:
 - **Mini-historia con giro** (5): the tension-building slide must open on a
   concrete, high-stakes detail of the situation, not a scene-setting
   generality.
+
+**Content-slide copy must be a real paragraph, not a one-line headline
+(mandatory).** Every content slide and "Para asentar" needs 2-4 concrete
+sentences that build genuine identification with one specific microdolor --
+a recognizable situation, not an abstract label for a feeling. "Sientes
+culpa a veces" is too thin; "Cada vez que por fin ves una cifra que te hace
+respirar, aparece una urgencia y te quedás otra vez en ceros" names the
+actual pattern. This full paragraph is what gets baked as `--body-text` (see
+"Design mix" above) -- it is real content the reader reads on the image
+itself, not a caption-only detail. A single generic sentence that could sit
+on any post about any topic is a defect, not a stylistic minimum.
 
 1. **Narrativo: problema → causa/origen → cómo se manifiesta → consecuencia →
    Para asentar → CTA.** 6 slides, siempre. Slide 1 plantea el problema

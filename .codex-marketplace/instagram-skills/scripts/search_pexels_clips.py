@@ -275,14 +275,19 @@ def search_photos(term: str, api_key: str, per_page: int = RESULTS_PER_TERM) -> 
 
 
 def gather_candidates(
-    terms: list, api_key: str, author_id: Optional[int] = None, per_page: int = RESULTS_PER_TERM
+    terms: list, api_key: str, author_id: Optional[int] = None, per_page: int = RESULTS_PER_TERM,
+    include_video: bool = True,
 ) -> dict:
-    """Search each term across Videos + Photos; merge by key. If author_id is
-    given, only candidates from that author survive (client-side filter --
-    see the module docstring's CAVEAT about why this isn't a native API filter)."""
+    """Search each term across Videos + Photos (or Photos only if
+    include_video=False -- used by search_pexels_photo.py, which never wants
+    video for a static carousel slide); merge by key. If author_id is given,
+    only candidates from that author survive (client-side filter -- see the
+    module docstring's CAVEAT about why this isn't a native API filter)."""
     candidates: dict = {}
     for term in terms:
-        found = search_videos(term, api_key, per_page) + search_photos(term, api_key, per_page)
+        found = search_photos(term, api_key, per_page)
+        if include_video:
+            found = search_videos(term, api_key, per_page) + found
         for cand in found:
             if author_id is not None and cand["author_id"] != author_id:
                 continue
@@ -312,14 +317,21 @@ def _looks_like_studio_account(author_name: str) -> bool:
     return any(word in lowered for word in STUDIO_NAME_BLOCKLIST)
 
 
-def pick_protagonist(general_terms: list, moments: list, api_key: str) -> dict:
+def pick_protagonist(
+    general_terms: list, moments: list, api_key: str, include_video: bool = True
+) -> dict:
     """Phase 0: choose one author with the best candidate coverage across
     the reel's moments, using general_terms to build an author pool and
     each moment's primary search term to test coverage. Multi-model studio
     accounts are excluded up front -- they win on raw coverage but break
-    the actual goal (one consistent person across the reel)."""
-    print("Buscando protagonista con cobertura en Pexels (fotos + videos)...")
-    pool = gather_candidates(general_terms, api_key, author_id=None, per_page=PROTAGONIST_POOL_PER_PAGE)
+    the actual goal (one consistent person across the reel). include_video is
+    only False when called from search_pexels_photo.py for a carousel."""
+    kind = "fotos + videos" if include_video else "fotos"
+    print(f"Buscando protagonista con cobertura en Pexels ({kind})...")
+    pool = gather_candidates(
+        general_terms, api_key, author_id=None, per_page=PROTAGONIST_POOL_PER_PAGE,
+        include_video=include_video,
+    )
     author_counts = Counter(c["author_id"] for c in pool.values())
     author_names = {c["author_id"]: c["author_name"] for c in pool.values()}
     ranked_authors = [aid for aid, _ in author_counts.most_common() if aid]
@@ -339,7 +351,10 @@ def pick_protagonist(general_terms: list, moments: list, api_key: str) -> dict:
         covered = 0
         for moment in moments:
             primary_term = moment["search_terms"][0]
-            hits = gather_candidates([primary_term], api_key, author_id=author_id, per_page=COVERAGE_TEST_PER_PAGE)
+            hits = gather_candidates(
+                [primary_term], api_key, author_id=author_id, per_page=COVERAGE_TEST_PER_PAGE,
+                include_video=include_video,
+            )
             if hits:
                 covered += 1
         print(f"  Candidato: {author_names[author_id]} -- cubre {covered}/{len(moments)} momentos")
@@ -357,33 +372,41 @@ def pick_protagonist(general_terms: list, moments: list, api_key: str) -> dict:
     return best
 
 
-def resolve_moment_candidates(moment: dict, protagonist_id: int, api_key: str) -> tuple:
+def resolve_moment_candidates(
+    moment: dict, protagonist_id: int, api_key: str, include_video: bool = True
+) -> tuple:
     """4-tier cascade for one moment. Returns (candidates dict, tier string).
     tier is None for a normal protagonist-solo match."""
-    candidates = gather_candidates(moment["search_terms"], api_key, author_id=protagonist_id)
+    candidates = gather_candidates(
+        moment["search_terms"], api_key, author_id=protagonist_id, include_video=include_video
+    )
     if candidates:
         return candidates, None
 
     print("  Sin candidatos de la protagonista en solitario, probando acompañada...")
     accompanied_terms = [strip_solitude_words(t) for t in moment["search_terms"]]
-    candidates = gather_candidates(accompanied_terms, api_key, author_id=protagonist_id)
+    candidates = gather_candidates(
+        accompanied_terms, api_key, author_id=protagonist_id, include_video=include_video
+    )
     if candidates:
         return candidates, "accompanied"
 
     cutaway_terms = moment.get("cutaway_terms") or []
     if cutaway_terms:
         print("  Sin candidatos acompañada, probando imagen de apoyo (sin rostro)...")
-        candidates = gather_candidates(cutaway_terms, api_key, author_id=None)
+        candidates = gather_candidates(cutaway_terms, api_key, author_id=None, include_video=include_video)
         if candidates:
             return candidates, "cutaway"
 
     print("  Sin imagen de apoyo, buscando cualquier autor para este momento...")
-    candidates = gather_candidates(moment["search_terms"], api_key, author_id=None)
+    candidates = gather_candidates(
+        moment["search_terms"], api_key, author_id=None, include_video=include_video
+    )
     if candidates:
         return candidates, "different_protagonist"
 
     print("  Sin resultados con los términos originales, ampliando búsqueda...")
-    candidates = gather_candidates(GENERIC_FALLBACK_TERMS, api_key, author_id=None)
+    candidates = gather_candidates(GENERIC_FALLBACK_TERMS, api_key, author_id=None, include_video=include_video)
     return candidates, "approximate"
 
 

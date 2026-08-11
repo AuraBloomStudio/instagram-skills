@@ -157,36 +157,54 @@ DEFAULT_VISUAL_STYLE = "photo"
 STATE_PATH = REPO_ROOT / "testing" / "image_gen_state.json"
 ROTATION_HISTORY = 2  # avoid repeating any of the last N picks per category
 
-# --- Baked-in headline text (--headline-main / --headline-accent) ----------
+# --- Baked-in headline text (--headline-main / --headline-accent / ---------
+# --headline-extra / --body-text) --------------------------------------
 # Shared font cache -- generate_diagram_image.py imports FONT_CACHE_DIR and
 # _download_font from here instead of keeping its own copy, so there is one
 # cache directory and one download helper for every script that bakes text.
 FONT_CACHE_DIR = REPO_ROOT / "testing" / "fonts"
 
-# Same two-tier typography as canva_title_style.md (bold poster headline +
-# pale-gold script accent line), same exact accent color/font-URL pattern
-# already proven in a real render by render_reel_json2video.py's
-# HOOK_ACCENT_FONT_URL -- kept in sync on purpose so carousels and reels read
-# as one brand system. Anton stands in for "Anton or Oswald Bold" per that
-# file's spec -- Oswald in google/fonts ships only as a single variable file
-# (Oswald[wght].ttf, no static Bold instance, confirmed 404 on the expected
-# static path), while Anton ships as one static file that's inherently the
-# condensed/poster weight the spec wants, no variable-axis handling needed.
+# Poppins Bold for the main headline -- matches render_reel_json2video.py's
+# HOOK_MAIN_FONT exactly (reels and carousels read as one brand system, not
+# two different typography systems). Anton was tried first as a stand-in for
+# canva_title_style.md's old "Anton or Oswald Bold" spec, but that spec is
+# now Poppins Bold too, see canva_title_style.md.
 HEADLINE_MAIN_FONT_URL = (
-    "https://raw.githubusercontent.com/google/fonts/main/ofl/anton/Anton-Regular.ttf"
+    "https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-Bold.ttf"
 )
 HEADLINE_ACCENT_FONT_URL = (
     "https://raw.githubusercontent.com/google/fonts/main/ofl/playfairdisplay/"
     "PlayfairDisplay-Italic%5Bwght%5D.ttf"
 )
+# --headline-extra (hook only, a short third line under main+accent) --
+# Poppins SemiBold, same pale gold as the accent line so it doesn't compete
+# in hierarchy with the main headline.
+HEADLINE_EXTRA_FONT_URL = (
+    "https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-SemiBold.ttf"
+)
 HEADLINE_MAIN_COLOR = (242, 169, 0)  # #F2A900
 HEADLINE_ACCENT_COLOR = (250, 232, 168)  # #FAE8A8
+HEADLINE_EXTRA_COLOR = HEADLINE_ACCENT_COLOR  # same pale gold
+# --body-text (content slides 2-5 only): the longer 2-4 sentence microdolor
+# copy, baked separately from the gold title/subtitle -- same cyan as the
+# reel subtitles (SUBTITLE_WORD_COLOR in render_reel_json2video.py), same
+# Poppins Bold weight too. Never combined with --headline-extra on the same
+# slide (hook vs. content slides are mutually exclusive callers).
+BODY_TEXT_COLOR = (34, 211, 238)  # #22D3EE
 # Solid outline behind the headline, same rationale as HOOK_MAIN_STROKE_* in
 # render_reel_json2video.py: keeps contrast when the zone lands on a bright
-# patch of the photo (a window, a light wall) -- applied to both lines here
+# patch of the photo (a window, a light wall) -- applied to every block here
 # since static photos vary more than reel B-roll, unlike the reel hook which
 # only stroked the main phrase.
 HEADLINE_STROKE_COLOR = (28, 18, 8)  # #1C1208
+
+# Default text band is the top/bottom 30% of the frame (a short 1-2 line
+# headline). A body-text paragraph (2-4 sentences) needs more room to sit
+# next to the title/subtitle without crowding, so it gets a wider band --
+# both the OpenCV face check and the text layout use the same band size, so
+# the check always covers exactly the area the text will actually occupy.
+DEFAULT_BAND_FRACTION = 0.30
+BODY_BAND_FRACTION = 0.55
 
 # Index into CAMERA_ANGLES (image_prompt_style.md) -> deterministic
 # text-safe zone. The script already knows exactly which angle it asked for
@@ -195,7 +213,10 @@ HEADLINE_STROKE_COLOR = (28, 18, 8)  # #1C1208
 # hands-only close-up all guarantee (by construction) where the face can or
 # can't be. "auto" marks the 2 angles that don't guarantee anything on their
 # own (profile/three-quarter turned away, softly backlit) -- those fall back
-# to the OpenCV veto check on both thirds before trusting either one.
+# to the OpenCV veto check on both thirds before trusting either one. Only
+# meaningful for Gemini-generated photos (the script requested that angle);
+# --source-image (Pexels or any externally supplied photo) always uses
+# "auto" since nothing was requested about its composition.
 CAMERA_ANGLE_SAFE_ZONES = ["bottom", "auto", "auto", "top", "top"]
 
 # Index into COMPOSITION_ARCHETYPES (image_prompt_style.md) for the 2 that
@@ -237,19 +258,24 @@ def _wrap_text(draw: "ImageDraw.ImageDraw", text: str, font: "ImageFont.FreeType
     return lines
 
 
-def _zone_pixel_bounds(zone: str, width: int, height: int) -> tuple:
-    band_height = round(height * 0.30)
+def _zone_pixel_bounds(
+    zone: str, width: int, height: int, band_fraction: float = DEFAULT_BAND_FRACTION
+) -> tuple:
+    band_height = round(height * band_fraction)
     if zone == "top":
         return (0, 0, width, band_height)
     return (0, height - band_height, width, height)
 
 
-def _zone_has_face(image: "Image.Image", zone: str) -> bool:
-    """OpenCV Haar-cascade check on one third of the frame -- offline, free,
-    no extra Gemini call. Only reached for the 2 ambiguous camera angles (or
-    the 4 character-illustration styles, which have no angle system at all),
-    never for flat-color/mezcla-ilustracion (no protagonist, no face
-    possible) or the 3 deterministic photo angles."""
+def _zone_has_face(
+    image: "Image.Image", zone: str, band_fraction: float = DEFAULT_BAND_FRACTION
+) -> bool:
+    """OpenCV Haar-cascade check on the given band of the frame -- offline,
+    free, no extra Gemini call. Reached for the 2 ambiguous Gemini camera
+    angles, the 4 character-illustration styles (no angle system at all),
+    and always for --source-image (Pexels or any externally supplied photo,
+    no composition info at all) -- never for flat-color/mezcla-ilustracion
+    (no protagonist, no face possible) or the 3 deterministic photo angles."""
     try:
         import cv2
         import numpy as np
@@ -259,7 +285,7 @@ def _zone_has_face(image: "Image.Image", zone: str) -> bool:
             "Instala con: pip install opencv-python"
         ) from e
 
-    box = _zone_pixel_bounds(zone, image.width, image.height)
+    box = _zone_pixel_bounds(zone, image.width, image.height, band_fraction)
     crop = image.crop(box).convert("L")
     array = np.array(crop)
     cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
@@ -267,83 +293,163 @@ def _zone_has_face(image: "Image.Image", zone: str) -> bool:
     return len(faces) > 0
 
 
-def resolve_headline_zone(preferred_zone: str, image: "Image.Image") -> str:
+def resolve_headline_zone(
+    preferred_zone: str, image: "Image.Image", band_fraction: float = DEFAULT_BAND_FRACTION
+) -> str:
     """preferred_zone is "top"/"bottom" (deterministic, no check needed) or
-    "auto" (ambiguous angle -- verify with OpenCV before trusting a zone).
-    Always returns a usable zone: if both thirds show a face, defaults to
-    "top" anyway with a warning rather than skipping the headline entirely --
-    every generated image gets baked text, never a silent gap."""
+    "auto" (ambiguous angle, illustrated style, or --source-image -- verify
+    with OpenCV before trusting a zone). band_fraction must match whatever
+    render_headline will actually use for this call (see BODY_BAND_FRACTION),
+    so the face check covers the real footprint of the text, not just a
+    generic third. Always returns a usable zone: if both bands show a face,
+    defaults to "top" anyway with a warning rather than skipping the
+    headline entirely -- every generated image gets baked text, never a
+    silent gap."""
     if preferred_zone in ("top", "bottom"):
         return preferred_zone
-    if not _zone_has_face(image, "top"):
+    if not _zone_has_face(image, "top", band_fraction):
         return "top"
-    if not _zone_has_face(image, "bottom"):
+    if not _zone_has_face(image, "bottom", band_fraction):
         return "bottom"
     print(
-        "  Aviso: se detecto un rostro en ambos tercios candidatos para el "
-        "titular; se usa el tercio superior de todos modos (revisar el "
+        "  Aviso: se detecto un rostro en ambas zonas candidatas para el "
+        "texto; se usa la zona superior de todos modos (revisar el "
         "resultado a mano)."
     )
     return "top"
 
 
+# Same alpha stops as render_reel_json2video.py's GRADIENT_HTML_TEMPLATE
+# (approved there after 2 rounds of adjustment against real renders,
+# confirmed visible even against the brightest frame of a real render) --
+# darkest at the very top and very bottom, lightest in the middle. Reused
+# verbatim rather than re-derived, so a cyan body-text block over an
+# uncontrolled Pexels photo gets the same proven contrast treatment reels
+# already rely on.
+GRADIENT_STOPS = [
+    (0.00, 0.75),
+    (0.12, 0.45),
+    (0.25, 0.18),
+    (0.55, 0.18),
+    (0.75, 0.45),
+    (0.88, 0.75),
+    (1.00, 0.95),
+]
+
+
+def _gradient_alpha_at(t: float) -> float:
+    for (t0, a0), (t1, a1) in zip(GRADIENT_STOPS, GRADIENT_STOPS[1:]):
+        if t0 <= t <= t1:
+            frac = (t - t0) / (t1 - t0) if t1 > t0 else 0.0
+            return a0 + (a1 - a0) * frac
+    return GRADIENT_STOPS[-1][1]
+
+
+def apply_gradient_scrim(image: "Image.Image") -> "Image.Image":
+    """Full-frame top-to-bottom dark scrim, only applied when baking
+    --body-text (a full paragraph, unlike the short headline, needs
+    guaranteed contrast regardless of where it lands on real footage)."""
+    width, height = image.size
+    overlay = Image.new("RGBA", (width, height))
+    for y in range(height):
+        alpha = _gradient_alpha_at(y / max(height - 1, 1))
+        overlay.paste((0, 0, 0, round(alpha * 255)), (0, y, width, y + 1))
+    return Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
+
+
 def render_headline(
-    image: "Image.Image", zone: str, headline_main: str, headline_accent: Optional[str]
+    image: "Image.Image",
+    zone: str,
+    headline_main: str,
+    headline_accent: Optional[str] = None,
+    headline_extra: Optional[str] = None,
+    body_text: Optional[str] = None,
 ) -> "Image.Image":
-    """Bake headline_main (+ optional headline_accent) onto image, centered
-    within the given zone ("top"/"bottom" = that third of the frame,
-    "center" = the whole canvas, used for flat-color quote cards where the
-    text IS the entire design)."""
+    """Bake headline_main (+ optional headline_accent, and EITHER
+    headline_extra OR body_text, never both) onto image, centered within the
+    given zone ("top"/"bottom" = that band of the frame -- BODY_BAND_FRACTION
+    wide if body_text is given, DEFAULT_BAND_FRACTION otherwise -- "center" =
+    the whole canvas, used for flat-color quote cards where the text IS the
+    entire design). body_text also gets a full-frame gradient scrim behind
+    every block (see apply_gradient_scrim)."""
     image = image.copy()
+    if body_text:
+        image = apply_gradient_scrim(image)
     draw = ImageDraw.Draw(image)
     width, height = image.size
+    max_text_width = round(width * 0.86)
 
-    main_path = _download_font(HEADLINE_MAIN_FONT_URL, FONT_CACHE_DIR / "Anton-Regular.ttf")
+    main_path = _download_font(HEADLINE_MAIN_FONT_URL, FONT_CACHE_DIR / "Poppins-Bold.ttf")
     main_size = max(round(width * 0.075), 40)
     main_font = ImageFont.truetype(str(main_path), main_size)
-    max_text_width = round(width * 0.86)
     main_lines = _wrap_text(draw, headline_main.upper(), main_font, max_text_width)
-    main_line_height = round(main_size * 1.15)
+    blocks = [
+        {
+            "lines": main_lines, "font": main_font,
+            "line_height": round(main_size * 1.15), "color": HEADLINE_MAIN_COLOR,
+            "stroke_width": max(round(main_size * 0.035), 2),
+        }
+    ]
 
-    accent_lines: list = []
-    accent_font = None
-    accent_line_height = 0
     if headline_accent:
         accent_path = _download_font(
             HEADLINE_ACCENT_FONT_URL, FONT_CACHE_DIR / "PlayfairDisplay-Italic.ttf"
         )
         accent_size = max(round(width * 0.06), 32)
         accent_font = ImageFont.truetype(str(accent_path), accent_size)
-        accent_lines = _wrap_text(draw, headline_accent, accent_font, max_text_width)
-        accent_line_height = round(accent_size * 1.2)
+        blocks.append(
+            {
+                "lines": _wrap_text(draw, headline_accent, accent_font, max_text_width),
+                "font": accent_font, "line_height": round(accent_size * 1.2),
+                "color": HEADLINE_ACCENT_COLOR, "stroke_width": max(round(accent_size * 0.02), 1),
+            }
+        )
 
-    block_height = len(main_lines) * main_line_height + len(accent_lines) * accent_line_height
+    if headline_extra:
+        extra_path = _download_font(
+            HEADLINE_EXTRA_FONT_URL, FONT_CACHE_DIR / "Poppins-SemiBold.ttf"
+        )
+        extra_size = max(round(width * 0.045), 26)
+        extra_font = ImageFont.truetype(str(extra_path), extra_size)
+        blocks.append(
+            {
+                "lines": _wrap_text(draw, headline_extra, extra_font, max_text_width),
+                "font": extra_font, "line_height": round(extra_size * 1.3),
+                "color": HEADLINE_EXTRA_COLOR, "stroke_width": max(round(extra_size * 0.025), 1),
+            }
+        )
 
+    if body_text:
+        body_size = max(round(width * 0.042), 28)
+        body_font = ImageFont.truetype(str(main_path), body_size)  # same Poppins Bold file
+        blocks.append(
+            {
+                "lines": _wrap_text(draw, body_text, body_font, max_text_width),
+                "font": body_font, "line_height": round(body_size * 1.35),
+                "color": BODY_TEXT_COLOR, "stroke_width": max(round(body_size * 0.025), 1),
+            }
+        )
+
+    block_height = sum(len(b["lines"]) * b["line_height"] for b in blocks)
+
+    band_fraction = BODY_BAND_FRACTION if body_text else DEFAULT_BAND_FRACTION
     if zone == "top":
-        band_top, band_bottom = 0, round(height * 0.30)
+        band_top, band_bottom = 0, round(height * band_fraction)
     elif zone == "bottom":
-        band_top, band_bottom = height - round(height * 0.30), height
+        band_top, band_bottom = height - round(height * band_fraction), height
     else:  # "center" -- flat-color quote cards, text is the whole design
         band_top, band_bottom = 0, height
     y = (band_top + band_bottom) / 2 - block_height / 2
 
-    for line in main_lines:
-        bbox = draw.textbbox((0, 0), line, font=main_font)
-        x = (width - (bbox[2] - bbox[0])) / 2
-        draw.text(
-            (x, y), line, font=main_font, fill=HEADLINE_MAIN_COLOR,
-            stroke_width=max(round(main_size * 0.035), 2), stroke_fill=HEADLINE_STROKE_COLOR,
-        )
-        y += main_line_height
-
-    for line in accent_lines:
-        bbox = draw.textbbox((0, 0), line, font=accent_font)
-        x = (width - (bbox[2] - bbox[0])) / 2
-        draw.text(
-            (x, y), line, font=accent_font, fill=HEADLINE_ACCENT_COLOR,
-            stroke_width=max(round(accent_size * 0.02), 1), stroke_fill=HEADLINE_STROKE_COLOR,
-        )
-        y += accent_line_height
+    for b in blocks:
+        for line in b["lines"]:
+            bbox = draw.textbbox((0, 0), line, font=b["font"])
+            x = (width - (bbox[2] - bbox[0])) / 2
+            draw.text(
+                (x, y), line, font=b["font"], fill=b["color"],
+                stroke_width=b["stroke_width"], stroke_fill=HEADLINE_STROKE_COLOR,
+            )
+            y += b["line_height"]
 
     return image
 
@@ -613,6 +719,20 @@ def select_setting(spec: str, settings: list) -> str:
     return _resolve_indexed_entry(spec, settings, "--setting")
 
 
+def cover_resize(image: "Image.Image", target_size: tuple) -> "Image.Image":
+    """Scale image to fully cover target_size (never letterboxed), then
+    center-crop the overflow -- used for --source-image, since a real Pexels
+    photo's native dimensions rarely match the exact carousel aspect ratio."""
+    target_w, target_h = target_size
+    src_w, src_h = image.size
+    scale = max(target_w / src_w, target_h / src_h)
+    new_w, new_h = round(src_w * scale), round(src_h * scale)
+    resized = image.resize((new_w, new_h), Image.LANCZOS)
+    left = (new_w - target_w) // 2
+    top = (new_h - target_h) // 2
+    return resized.crop((left, top, left + target_w, top + target_h))
+
+
 def render_flat_color_image(color: dict, size: tuple) -> "Image.Image":
     width, height = size
     if color["kind"] == "solid":
@@ -795,11 +915,23 @@ def main() -> int:
         "Composición y ángulo de cámara siguen rotando libres.",
     )
     parser.add_argument(
+        "--source-image",
+        default=None,
+        metavar="RUTA",
+        help="Salta Gemini por completo: abre esta imagen ya existente (ej. "
+        "descargada de Pexels), la ajusta al --aspect pedido (cover + recorte "
+        "centrado) y le quema el titular encima. La zona del titular siempre "
+        "se resuelve con el veto de OpenCV (no hay composición pedida que "
+        "garantice nada de antemano). Incompatible con --flat-color y con "
+        "cualquier llamada a Gemini.",
+    )
+    parser.add_argument(
         "--headline-main",
         default=None,
-        help="Titular corto a quemar sobre la imagen con Pillow (Anton, "
-        "mismo estilo que canva_title_style.md). Sin esta opción, "
-        "comportamiento idéntico al de antes: ninguna imagen lleva texto.",
+        help="Titular corto a quemar sobre la imagen con Pillow (Poppins "
+        "Bold, mismo estilo que canva_title_style.md y que los reels). Sin "
+        "esta opción, comportamiento idéntico al de antes: ninguna imagen "
+        "lleva texto.",
     )
     parser.add_argument(
         "--headline-accent",
@@ -807,9 +939,38 @@ def main() -> int:
         help="Línea de cierre opcional, más corta, debajo de --headline-main "
         "(Playfair Display italic dorado pálido). Requiere --headline-main.",
     )
+    parser.add_argument(
+        "--headline-extra",
+        default=None,
+        help="Tercer bloque opcional, más corto todavía, debajo de "
+        "--headline-accent (Poppins SemiBold dorado pálido). Solo para el "
+        "hook de carrusel-constelaciones. Requiere --headline-main. "
+        "Incompatible con --body-text.",
+    )
+    parser.add_argument(
+        "--body-text",
+        default=None,
+        help="Párrafo largo (2-4 oraciones) a quemar en cian #22D3EE Poppins "
+        "Bold, con un degradado oscuro de fondo para legibilidad (mismos "
+        "stops que el degradado de reels). Solo para slides de contenido de "
+        "carrusel-constelaciones. Requiere --headline-main. Incompatible con "
+        "--headline-extra.",
+    )
     args = parser.parse_args()
     if args.headline_accent and not args.headline_main:
         print("--headline-accent requiere --headline-main.", file=sys.stderr)
+        return 1
+    if args.headline_extra and not args.headline_main:
+        print("--headline-extra requiere --headline-main.", file=sys.stderr)
+        return 1
+    if args.body_text and not args.headline_main:
+        print("--body-text requiere --headline-main.", file=sys.stderr)
+        return 1
+    if args.headline_extra and args.body_text:
+        print("--headline-extra y --body-text son incompatibles entre si.", file=sys.stderr)
+        return 1
+    if args.source_image and args.flat_color:
+        print("--source-image y --flat-color son incompatibles entre si.", file=sys.stderr)
         return 1
 
     copy_path = Path(args.copy_file)
@@ -832,7 +993,29 @@ def main() -> int:
             print(f"Generando fondo de color (sin Gemini, sin API key): {color['label']}")
             image = render_flat_color_image(color, output_size)
             if args.headline_main:
-                image = render_headline(image, "center", args.headline_main, args.headline_accent)
+                image = render_headline(
+                    image, "center", args.headline_main, args.headline_accent,
+                    args.headline_extra, args.body_text,
+                )
+            image.save(out_path, "PNG")
+            print(f"Imagen guardada en: {out_path} ({output_size[0]}x{output_size[1]})")
+            return 0
+
+        if args.source_image:
+            src_path = Path(args.source_image)
+            if not src_path.exists():
+                raise GenerationError(f"No existe --source-image: {src_path}")
+            print(f"Usando imagen existente (sin Gemini, sin API key): {src_path.name}")
+            image = Image.open(src_path).convert("RGB")
+            image = cover_resize(image, output_size)
+            if args.headline_main:
+                band_fraction = BODY_BAND_FRACTION if args.body_text else DEFAULT_BAND_FRACTION
+                zone = resolve_headline_zone("auto", image, band_fraction)
+                print(f"  Zona del titular: {zone}")
+                image = render_headline(
+                    image, zone, args.headline_main, args.headline_accent,
+                    args.headline_extra, args.body_text,
+                )
             image.save(out_path, "PNG")
             print(f"Imagen guardada en: {out_path} ({output_size[0]}x{output_size[1]})")
             return 0
@@ -893,9 +1076,13 @@ def main() -> int:
             image = image.resize(output_size, Image.LANCZOS)
 
         if args.headline_main:
-            zone = resolve_headline_zone(headline_zone, image)
+            band_fraction = BODY_BAND_FRACTION if args.body_text else DEFAULT_BAND_FRACTION
+            zone = resolve_headline_zone(headline_zone, image, band_fraction)
             print(f"  Zona del titular: {zone}")
-            image = render_headline(image, zone, args.headline_main, args.headline_accent)
+            image = render_headline(
+                image, zone, args.headline_main, args.headline_accent,
+                args.headline_extra, args.body_text,
+            )
 
         image.save(out_path, "PNG")
         print(f"Imagen guardada en: {out_path} ({output_size[0]}x{output_size[1]})")
