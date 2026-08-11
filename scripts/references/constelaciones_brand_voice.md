@@ -198,6 +198,39 @@ here. Text per structure:
 5. **Detrás de cámaras / voz personal.** Mensaje en primera persona de Diana,
    tono íntimo y reflexivo, 2-3 líneas.
 
+## REEL_SCRIPT_LENGTH
+
+Target length for a reel's narrated guion, so the finished video lands at
+40-50s TOTAL (narration + the optional 2s hook) instead of being cut down
+after the fact. This is a hard structural limit on the guion itself, same
+category as the other structure rules above -- not just a post-hoc warning.
+
+**Target: 108-136 words.**
+
+Math, from real measured data (not a generic words-per-minute estimate):
+the approved brand narration pace -- voice "Sulafat," brisk/warm
+conversational rhythm, see `narracion-voz-gemini`'s "Ritmo de narracion" --
+is **170 words/min (2.833 words/sec)**, measured directly from the reel
+"crei-que-solo-tenia-mal-caracter" (189 words narrated in 66.73s, verified
+via `ffprobe` against the actual `narracion.mp3`, not the rounded figure
+already in that skill's docs).
+
+The 40-50s target is deliberately the TOTAL video duration, so the word
+range reserves the hook's fixed 2s even for reels that end up without one --
+one single range for every reel, hook or no hook, rather than two different
+targets depending on a decision made later at render time:
+- Narration budget: 40-2=38s to 50-2=48s.
+- 38s × 2.833 words/sec ≈ 108 words (floor).
+- 48s × 2.833 words/sec ≈ 136 words (ceiling).
+
+Whoever drafts a reel's guion (by hand, in another conversation, or however
+it happens -- there is no dedicated drafting skill in this bundle as of this
+writing) should aim for 108-136 words. `narracion-voz-gemini` checks this
+automatically the moment a guion is pasted in (see that skill's Flujo) and
+reports the actual word count/estimated duration before generating any
+audio -- but the target belongs here, next to the other structural rules,
+not only as a downstream warning.
+
 ## Reference example (contrast-couplet device, for calibration)
 
 From an existing approved post, showing the "tú" body with the third-person
@@ -215,7 +248,7 @@ couplet shift:
 
 ## Changing the voice later
 
-Edit this file directly — all three skills re-read it on every draft, so no
-code change is needed. If a draft doesn't sound right, say so and point at the
+Edit this file directly — every skill that drafts copy or narration
+re-reads it on every draft, so no code change is needed. If a draft doesn't sound right, say so and point at the
 paragraph; that correction is what should get folded back into this file, the
 same way `image_prompt_style.md` evolved from real feedback.

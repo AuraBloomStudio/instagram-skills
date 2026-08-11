@@ -44,11 +44,18 @@ pedia explicitamente "pausado" salio demasiado lenta (189 palabras en
 90.8s, ~125 palabras/min); una segunda version mas neutra ("ritmo natural de
 conversacion normal") seguia sintiendose lenta (71.4s, ~159 palabras/min);
 la version actual, que pide un ritmo "vivo y agil, un poco mas rapido que
-una conversacion pausada", quedo aprobada (66.7s, ~170 palabras/min). **No
-preguntar al usuario por el ritmo en futuras narraciones** -- esta decision
-ya esta tomada y vive hard-codeada en `scripts/generate_reel_narration.py`
-(`STYLE_INSTRUCTION`). Si algun dia se quiere volver a ajustar el ritmo, se
-edita esa constante, no se decide por conversacion.
+una conversacion pausada", quedo aprobada (66.73s medido con `ffprobe` sobre
+el `narracion.mp3` real, ~170 palabras/min). **No preguntar al usuario por
+el ritmo en futuras narraciones** -- esta decision ya esta tomada y vive
+hard-codeada en `scripts/generate_reel_narration.py` (`STYLE_INSTRUCTION`).
+Si algun dia se quiere volver a ajustar el ritmo, se edita esa constante, no
+se decide por conversacion.
+
+Este mismo ritmo (170 palabras/min) es la base del rango de longitud del
+guion -- ver `REEL_SCRIPT_LENGTH` en
+`../../scripts/references/constelaciones_brand_voice.md` (108-136 palabras,
+para que el video completo quede en 40-50s) -- y del chequeo del paso 2
+del Flujo, abajo.
 
 ## Flujo
 
@@ -57,11 +64,29 @@ edita esa constante, no se decide por conversacion.
    tema/hook del guion (mismo criterio que `seleccion-clips-pexels`) y
    avisar cual se uso -- no preguntar antes de trabajar.
 
-2. **Guardar el guion** tal cual, sin reescribirlo ni resumirlo, en
+2. **Chequear la duracion ANTES de guardar o generar nada.** Contar las
+   palabras del guion pegado y calcular los segundos estimados de narracion
+   a razon de 170 palabras/min (2.833 palabras/seg -- ver "Ritmo de
+   narracion" arriba y `REEL_SCRIPT_LENGTH` en
+   `constelaciones_brand_voice.md`). El objetivo es que el video final
+   (narracion + los 2s fijos del gancho, se use gancho o no en este reel en
+   particular) quede en 40-50s -- eso equivale a **108-136 palabras**.
+   Avisar siempre, sea cual sea el resultado:
+   - Cuantas palabras tiene el guion.
+   - Cuantos segundos estimados de narracion da (`palabras / 2.833`).
+   - Si cae dentro de 108-136 palabras (en rango) o fuera (por arriba o por
+     abajo).
+   - Si esta fuera de rango, decir aproximadamente cuantas palabras hay que
+     agregar o cortar para volver a entrar (`palabras_actuales - 136` si se
+     paso, `108 - palabras_actuales` si le falta).
+   Este chequeo es informativo, no bloqueante -- avisar y seguir el flujo
+   igual si el usuario decide continuar con el guion tal cual esta.
+
+3. **Guardar el guion** tal cual, sin reescribirlo ni resumirlo, en
    `testing/reel_scripts/<reel_slug>.txt` (crear la carpeta si no existe).
    Esta skill nunca corrige ni reescribe el texto del guion -- solo lo narra.
 
-3. **Ejecutar el script** por la tool de Bash, desde la raiz del repo:
+4. **Ejecutar el script** por la tool de Bash, desde la raiz del repo:
    ```
    python scripts/generate_reel_narration.py "testing/reel_scripts/<reel_slug>.txt" <reel_slug>
    ```
@@ -98,7 +123,7 @@ edita esa constante, no se decide por conversacion.
      `scripts/output_audio/<reel_slug>/narracion.mp3` y limpia los
      archivos temporales de fragmentos.
 
-4. **Confirmar al usuario**: ruta final del archivo, cuantos fragmentos se
+5. **Confirmar al usuario**: ruta final del archivo, cuantos fragmentos se
    generaron (si el guion era largo), y recordar que el audio queda listo
    para importarse directo en el editor de video junto con los clips de
    `seleccion-clips-pexels`.
@@ -123,6 +148,11 @@ edita esa constante, no se decide por conversacion.
 - El archivo final siempre es `.mp3` en
   `scripts/output_audio/<reel_slug>/narracion.mp3` -- no cambiar el nombre
   ni la extension sin que el usuario lo pida explicitamente.
+- **El chequeo de duracion (paso 2 del Flujo) corre siempre, para todo
+  guion recibido, nunca en silencio y nunca salteado** -- avisar palabras,
+  segundos estimados, y si esta dentro o fuera de 108-136 palabras, antes de
+  guardar el guion o generar audio. No bloquea el flujo si el usuario decide
+  seguir igual, pero el aviso en si no es opcional.
 
 ## Recursos
 
@@ -131,7 +161,8 @@ edita esa constante, no se decide por conversacion.
   Acepta `--out-dir` para cambiar la carpeta base de salida.
 - `../../scripts/references/constelaciones_brand_voice.md` -- voz de marca
   ("tu", tono calido/reflexivo) que informa la instruccion de estilo enviada
-  a Gemini TTS.
+  a Gemini TTS, y `REEL_SCRIPT_LENGTH` -- el rango objetivo de 108-136
+  palabras y el calculo detras (base del chequeo del paso 2 del Flujo).
 - `testing/reel_scripts/` -- guiones pegados por el usuario, uno por reel
   (gitignored).
 - `scripts/output_audio/` -- audios de narracion generados, uno por reel
