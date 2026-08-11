@@ -14,9 +14,11 @@ Flow:
   3. Split the narration's total duration across moments proportionally to
      each moment's word count (a reasonable proxy for how long that beat
      takes to narrate at a roughly constant speaking pace).
-  4. Upload the narration, the selected clips, and (optionally) a background
-     music file to JSON2Video's media library (every asset referenced in a
-     JSON2Video movie must be a public URL, never a local path).
+  4. Upload the narration, the selected clips, and a background music file
+     (--music if given, else the fixed brand track at DEFAULT_MUSIC_PATH if
+     it exists, else none) to JSON2Video's media library (every asset
+     referenced in a JSON2Video movie must be a public URL, never a local
+     path).
   5. Submit the movie JSON (one scene per moment, narration + optional music
      + native auto-generated subtitles as movie-level elements, vertical
      "instagram-story" resolution) and poll until it renders. Each scene
@@ -62,6 +64,18 @@ J2V_API_BASE = "https://api.json2video.com/v2"
 DEFAULT_CLIPS_DIR = REPO_ROOT / "scripts" / "output_clips"
 DEFAULT_AUDIO_DIR = REPO_ROOT / "scripts" / "output_audio"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "scripts" / "output_reels"
+
+# Fixed brand background-music track, used automatically when --music isn't
+# passed -- same "one locked-in default, no need to ask every time" pattern
+# as the "Sulafat" narration voice in narracion-voz-gemini. Lives under
+# marketing/ (already gitignored -- "local marketing assets, not meant for
+# the public repo") rather than committed to the repo, since a music track
+# raises its own redistribution-rights questions that a voice name never
+# does. --music still works as a one-off override when given. The file does
+# not exist yet as of this comment -- DEFAULT_MUSIC_PATH.exists() is checked
+# at runtime, so this silently falls back to "no music" (today's behavior)
+# until someone drops a file at this exact path.
+DEFAULT_MUSIC_PATH = REPO_ROOT / "marketing" / "brand_music.mp3"
 
 # Vertical 9:16 preset -> 1080x1920, confirmed against a real render.
 RESOLUTION = "instagram-story"
@@ -748,7 +762,7 @@ def download_final(url: str, out_path: Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("reel_slug", help="Nombre/slug del reel (define que carpetas de origen y de salida usar)")
-    parser.add_argument("--music", default=None, help="Ruta a un archivo local de musica de fondo (opcional)")
+    parser.add_argument("--music", default=None, help=f"Ruta a un archivo local de musica de fondo (opcional -- override puntual; sin este flag, usa la pista de marca fija en {DEFAULT_MUSIC_PATH} si existe)")
     parser.add_argument("--quality", default="high", choices=["low", "medium", "high"], help="Calidad de render (default: high)")
     parser.add_argument("--hook-main", default=None, help="Frase principal del gancho (amarillo/naranja #F2A900, Poppins bold). Requiere --hook-accent.")
     parser.add_argument("--hook-accent", default=None, help="Frase de acento del gancho (dorado palido #FAE8A8, Playfair Display italic). Requiere --hook-main.")
@@ -851,14 +865,27 @@ def main() -> int:
 
         music_url = None
         if args.music:
+            # Explicit override: fail loudly if the given path is wrong,
+            # same as before this default existed.
             music_path = Path(args.music)
             if not music_path.exists():
                 raise RenderError(f"No existe el archivo de musica: {music_path}")
+            print(f"  Musica: {music_path.name} (override via --music)")
+        elif DEFAULT_MUSIC_PATH.exists():
+            # No --music given: fall back to the fixed brand track. This is
+            # best-effort, never a hard error -- if the file is missing
+            # (not committed to the repo, see DEFAULT_MUSIC_PATH's comment),
+            # the render still proceeds with no music, same as always.
+            music_path = DEFAULT_MUSIC_PATH
+            print(f"  Musica: {music_path.name} (pista de marca por defecto, sin --music)")
+        else:
+            music_path = None
+            print("  (sin musica de fondo -- no se paso --music y no existe la pista de marca por defecto)")
+
+        if music_path is not None:
             music_name = f"{args.reel_slug}_musica{music_path.suffix.lower()}"
             music_url = upload_asset(music_path, music_name, api_key)
             uploaded_names.append(music_name)
-        else:
-            print("  (sin musica de fondo -- no se paso --music)")
 
         hook_clip_url = None
         if hook_clip_path is not None:

@@ -1,6 +1,6 @@
 ---
 name: edicion-reel-json2video
-description: Arma el video final de un reel de Constelaciones Familiares con la API de JSON2Video, a partir de los clips de B-roll y el orden_edicion.txt de seleccion-clips-pexels mas la narracion.mp3 de narracion-voz-gemini, ya guardados con el mismo slug del reel. Ordena las escenas segun orden_edicion.txt (un clip por momento, prefiriendo video sobre foto entre los 1-3 candidatos de cada uno), reparte la duracion total de la narracion entre los momentos en proporcion a las palabras de cada linea del guion, sube todo a JSON2Video (clips, narracion y musica de fondo opcional) porque la API solo acepta URLs publicas, genera subtitulos automaticos nativos en espanol via Whisper en Poppins, posicionados en la zona media-baja del encuadre (no pegados al fondo), en un solo color cian vivo (sin contraste entre la palabra activa y el resto de la linea), con un degradado oscuro fuerte que cubre todo el cuadro de arriba a abajo (confirmado visible incluso en el frame mas claro del video), agrega una transicion de fundido cruzado de 0.4s entre cada momento (incluido el gancho, si lo hay) en vez de cortes secos, opcionalmente arma un gancho inicial de 2s antes de que empiece la narracion (titular grande a dos fuentes -- Poppins bold amarillo/naranja de marca + Playfair Display italic dorado palido, mismos colores que los titulos de los posts estaticos -- como dos elementos `text` nativos de JSON2Video, no un elemento `html`, sobre su propio clip de fondo si seleccion-clips-pexels genero uno dedicado para el texto del gancho, o reciclando el clip de momento 1 si no), mezcla una pista de musica de fondo en volumen bajo si el usuario pasa un archivo (no hay musica de stock integrada en JSON2Video), renderiza en vertical 9:16 (instagram-story, 1080x1920) y descarga el resultado a scripts/output_reels/<slug>/reel_final.mp4. Usar para "arma el reel final de [tema]", "edita el video con los clips y la narracion", "renderiza el reel". Not for writing the script (write it first), not for selecting B-roll clips (use seleccion-clips-pexels), and not for generating the narration audio (use narracion-voz-gemini) -- this skill only assembles what those two already produced.
+description: Arma el video final de un reel de Constelaciones Familiares con la API de JSON2Video, a partir de los clips de B-roll y el orden_edicion.txt de seleccion-clips-pexels mas la narracion.mp3 de narracion-voz-gemini, ya guardados con el mismo slug del reel. Ordena las escenas segun orden_edicion.txt (un clip por momento, prefiriendo video sobre foto entre los 1-3 candidatos de cada uno), reparte la duracion total de la narracion entre los momentos en proporcion a las palabras de cada linea del guion, sube todo a JSON2Video (clips, narracion y musica de fondo opcional) porque la API solo acepta URLs publicas, genera subtitulos automaticos nativos en espanol via Whisper en Poppins, posicionados en la zona media-baja del encuadre (no pegados al fondo), en un solo color cian vivo (sin contraste entre la palabra activa y el resto de la linea), con un degradado oscuro fuerte que cubre todo el cuadro de arriba a abajo (confirmado visible incluso en el frame mas claro del video), agrega una transicion de fundido cruzado de 0.4s entre cada momento (incluido el gancho, si lo hay) en vez de cortes secos, opcionalmente arma un gancho inicial de 2s antes de que empiece la narracion (titular grande a dos fuentes -- Poppins bold amarillo/naranja de marca + Playfair Display italic dorado palido, mismos colores que los titulos de los posts estaticos -- como dos elementos `text` nativos de JSON2Video, no un elemento `html`, sobre su propio clip de fondo si seleccion-clips-pexels genero uno dedicado para el texto del gancho, o reciclando el clip de momento 1 si no), mezcla una pista de musica de fondo en volumen bajo -- la pista de marca fija por defecto en marketing/brand_music.mp3 (gitignored) si existe, o la que el usuario pase con --music como override puntual, o ninguna si no hay ni una ni la otra (no hay musica de stock integrada en JSON2Video), renderiza en vertical 9:16 (instagram-story, 1080x1920) y descarga el resultado a scripts/output_reels/<slug>/reel_final.mp4. Usar para "arma el reel final de [tema]", "edita el video con los clips y la narracion", "renderiza el reel". Not for writing the script (write it first), not for selecting B-roll clips (use seleccion-clips-pexels), and not for generating the narration audio (use narracion-voz-gemini) -- this skill only assembles what those two already produced.
 ---
 
 # Edicion del reel final (JSON2Video)
@@ -32,9 +32,23 @@ para Publora, solo que contra la API de JSON2Video en vez de Publora) y
 borra esos assets subidos al terminar, para no agotar el storage gratuito de
 la cuenta (~50MB en el plan de prueba).
 
-**JSON2Video tampoco tiene musica de stock integrada.** Si el usuario no
-pasa un archivo de musica con `--music`, el reel se renderiza solo con
-narracion y subtitulos -- nunca se bloquea el render por falta de musica.
+**JSON2Video tampoco tiene musica de stock integrada -- por eso hay una
+pista de marca fija por defecto**, mismo patron que la voz "Sulafat" fija de
+`narracion-voz-gemini` (un default que no hace falta pedir cada vez), con
+una diferencia importante: la voz es solo un nombre de parametro, la musica
+es un archivo binario real. `DEFAULT_MUSIC_PATH` en el script apunta a
+`marketing/brand_music.mp3` (carpeta ya gitignored -- "local marketing
+assets, no para el repo publico"). Resolucion, en orden:
+1. `--music <ruta>` si el usuario lo pasa -- override puntual, falla fuerte
+   si esa ruta especifica no existe.
+2. Si no se pasa `--music`, usa `marketing/brand_music.mp3` automaticamente
+   **si el archivo existe** en disco.
+3. Si no existe ninguno de los dos, el reel se renderiza solo con narracion
+   y subtitulos -- nunca se bloquea el render por falta de musica.
+El script imprime cual de los tres casos aplico antes de subir nada. No
+preguntar por un archivo de musica si ya existe el default -- solo preguntar
+cuando el usuario quiera explicitamente una pista distinta para ese reel
+puntual (ver paso 3 del Flujo).
 
 **Subtitulos:** son nativos de JSON2Video (`type: "subtitles"`), transcriben
 automaticamente el audio de la narracion con el modelo Whisper en espanol --
@@ -228,10 +242,13 @@ carpeta por separado antes de fallar.
    skill correr primero -- esta skill nunca genera clips ni narracion por su
    cuenta.
 
-3. **Preguntar una sola vez por la musica de fondo** si el usuario no la
-   menciono ya: "¿Tienes un archivo de musica instrumental para el fondo, o
-   sigo sin musica?". Si no tiene, seguir sin musica (regla dura, ver
-   arriba) -- no bloquear el render por esto.
+3. **Musica de fondo: no preguntar si ya existe la pista de marca por
+   defecto** (`marketing/brand_music.mp3`) -- se usa sola, sin pedir
+   confirmacion. Solo preguntar si el usuario quiere una pista distinta para
+   este reel puntual, o si el default no existe en disco todavia: "¿Tienes
+   un archivo de musica instrumental para el fondo, o sigo sin musica?". Si
+   no tiene ninguna de las dos, seguir sin musica (regla dura, ver arriba) --
+   no bloquear el render por esto.
 
    **Preguntar tambien, una sola vez, si quiere un gancho inicial** (si no
    lo pidio ya explicitamente). Si quiere uno, draftear junto al usuario un
@@ -302,8 +319,9 @@ carpeta por separado antes de fallar.
 - El gancho inicial es opcional -- preguntar una sola vez si lo quiere, y
   siempre draftear/confirmar el texto exacto con el usuario antes de
   renderizar, nunca inventarlo sin mostrarlo.
-- Musica de fondo es siempre opcional (ver seccion de arriba) -- no bloquear
-  el render por falta de un archivo de musica.
+- Musica de fondo nunca bloquea el render, sea la pista de marca por defecto
+  o una pasada con `--music` -- si ninguna existe, el reel se renderiza
+  igual, solo con narracion y subtitulos (ver seccion de arriba).
 - El archivo final siempre es `.mp4` en
   `scripts/output_reels/<reel_slug>/reel_final.mp4` -- no cambiar el nombre
   ni la extension sin que el usuario lo pida explicitamente.
@@ -326,7 +344,12 @@ carpeta por separado antes de fallar.
   la logica: `SUBTITLE_X`/`SUBTITLE_Y`, `GRADIENT_HTML_TEMPLATE`,
   `TRANSITION_STYLE`, `TRANSITION_DURATION_S` (ver limite duro arriba),
   `HOOK_DURATION_S`, `HOOK_MAIN_FONT`/`HOOK_ACCENT_FONT` y sus tamanos/
-  colores.
+  colores, y `DEFAULT_MUSIC_PATH` para cambiar la ruta de la pista de marca
+  por defecto.
+- `marketing/brand_music.mp3` -- pista de marca fija (gitignored, no se sube
+  al repo publico -- ver `DEFAULT_MUSIC_PATH`). No existe todavia como
+  archivo hasta que alguien lo coloque ahi; hasta entonces el render sigue
+  sin musica salvo que se pase `--music`.
 - `scripts/output_clips/` -- clips de B-roll + `orden_edicion.txt` por reel
   (gitignored, de `seleccion-clips-pexels`).
 - `scripts/output_audio/` -- narracion por reel (gitignored, de
