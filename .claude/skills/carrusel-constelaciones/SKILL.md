@@ -1,6 +1,6 @@
 ---
 name: carrusel-constelaciones
-description: Draft a multi-slide organic Instagram/Facebook carousel for Constelaciones Familiares in one of 5 structures (narrativo problema-explicación-Para asentar-CTA, lista de comportamientos, antes/después, autodiagnóstico, mini-historia con giro), following the brand voice in scripts/references/constelaciones_brand_voice.md. Writes slide-by-slide on-image text (second-to-last slide is always "Para asentar", last slide is always the book CTA) plus a separate caption with the CTA link and 2 fixed + 3 topic hashtags. Keeps one consistent protagonist (gender/age presentation) across all illustrated/photo slides of the same carousel, and gives the hook slide and CTA slide a flat brand-color "quote card" background instead of a photo. Supports 5 visual styles -- photo (default, cinematic realism) or 4 illustrated styles (minimal line-art, storybook, cartoon, sequential-panel storytelling) -- chosen explicitly by the user, never auto-rotated. On approval, saves each slide as .docx in Desktop/Posts Constelaciones and generates each slide's background by running scripts/generate_post_image.py once per slide, saved to Desktop/Imagenes Posts. Use for "hazme un carrusel de [tema]", "necesito un carrusel sobre [tema]", optionally with a visual style named ("...estilo minimalista/tipo libro/caricatura/storytelling..."). Not for single-image posts (use post-constelaciones) or paid ads (future ads-constelaciones).
+description: Draft a multi-slide organic Instagram/Facebook carousel for Constelaciones Familiares in one of 5 structures (narrativo problema-explicación-Para asentar-CTA, lista de comportamientos, antes/después, autodiagnóstico, mini-historia con giro), following the brand voice in scripts/references/constelaciones_brand_voice.md. Writes slide-by-slide on-image text (second-to-last slide is always "Para asentar", last slide is always the book CTA) plus a separate caption with the CTA link and 2 fixed + 3 topic hashtags. Keeps one consistent protagonist (gender/age presentation) across all illustrated/photo slides of the same carousel, and gives the hook slide and CTA slide a flat brand-color "quote card" background instead of a photo. Supports 6 visual styles -- photo (default, cinematic realism), 4 illustrated styles (minimal line-art, storybook, cartoon, sequential-panel storytelling), or the opt-in "mezcla" style that mixes 60% photo / 30% flat conceptual illustration / 10% diagram across the content slides of the SAME carousel instead of one style for all of them (see scripts/references/mixed_visual_style.md) -- chosen explicitly by the user, never auto-rotated. On approval, saves each slide as .docx in Desktop/Posts Constelaciones and generates each slide's background by running scripts/generate_post_image.py (or scripts/generate_diagram_image.py for a diagram slide in "mezcla") once per slide, saved to Desktop/Imagenes Posts. Use for "hazme un carrusel de [tema]", "necesito un carrusel sobre [tema]", optionally with a visual style named ("...estilo minimalista/tipo libro/caricatura/storytelling/mezcla..."). Not for single-image posts (use post-constelaciones) or paid ads (future ads-constelaciones).
 ---
 
 # Carrusel Constelaciones (multi-slide)
@@ -17,8 +17,10 @@ cada slide reutilizando `scripts/generate_post_image.py` una vez por slide
 - "necesito un carrusel sobre [tema]"
 - "arma un carrusel de Constelaciones sobre [tema]"
 - Puede incluir el estilo visual: "...estilo minimalista/tipo libro/
-  caricatura/storytelling sobre [tema]". Sin especificarlo, el estilo es
-  fotográfico (el de siempre, sin cambios).
+  caricatura/storytelling/mezcla sobre [tema]". Sin especificarlo, el estilo
+  es fotográfico (el de siempre, sin cambios). "Mezcla" es el estilo 60/30/10
+  (ver `../../scripts/references/mixed_visual_style.md`) -- 100% opcional, no
+  reemplaza nada del comportamiento default.
 
 No se activa para posts de una sola imagen (`post-constelaciones`) ni para
 anuncios pagados.
@@ -37,14 +39,20 @@ anuncios pagados.
    - **Nunca preguntar cuál usar antes de redactar** — elegir y avisar cuál se
      usó junto con el borrador.
 3. **Elegir estilo visual.** Si el usuario lo nombra ("estilo minimalista",
-   "tipo libro", "caricatura", "storytelling"), usar ese. Si no lo nombra,
-   usar `photo` (default, el comportamiento fotográfico de siempre). A
+   "tipo libro", "caricatura", "storytelling", "mezcla"), usar ese. Si no lo
+   nombra, usar `photo` (default, el comportamiento fotográfico de siempre). A
    diferencia de la estructura, el estilo visual **nunca se rota
    automáticamente** — es una preferencia explícita del usuario, no una
    variedad forzada. Si el usuario pide `storytelling`, avisarle brevemente
    (no como bloqueo) que es el estilo con más riesgo de que el personaje o el
    trazo varíen ligeramente entre slides, porque cada slide se genera con una
    llamada independiente a Gemini sin imagen de referencia compartida.
+   - **`mezcla`** es el estilo 60/30/10 (ver
+     `../../scripts/references/mixed_visual_style.md`): en vez de un único
+     estilo para todas las slides de contenido, mezcla foto / ilustración
+     plana / diagrama dentro del MISMO carrusel. Es un estilo alternativo
+     100% opcional para comparar contra el comportamiento de siempre — nunca
+     se activa sin que el usuario lo pida explícitamente.
 4. **Elegir un protagonista fijo para todo el carrusel.** A partir del copy
    (género gramatical del "tú"/"ella" del tema, o el que mejor encaje),
    definir una descripción corta en inglés (ej. `"a woman in her early-to-mid
@@ -57,6 +65,16 @@ anuncios pagados.
    incluir la frase-puente obligatoria (ver regla "Bridge required before the
    CTA" en `constelaciones_brand_voice.md`) + mención del libro — el link
    plano NO va en la slide, solo en la caption.
+5b. **Si el estilo visual es `mezcla`, clasificar cada slide de contenido**
+   (todas menos el hook y el CTA, que siguen siendo quote card plana) en
+   `foto` / `ilustración` / `diagrama`, siguiendo la heurística y el reparto
+   60/30/10 exactos de `mixed_visual_style.md` (narrativo/emocional -> foto,
+   conceptual explicativo -> ilustración, estructurado/enumerado -> diagrama;
+   método de mayor resto con empate foto > ilustración > diagrama; no forzar
+   un diagrama en carruseles con pocas slides de contenido). Anotar la
+   clasificación de cada slide para mostrarla en el paso 7 y usarla en el
+   paso 10 — este paso no existe (se omite entero) si el estilo no es
+   `mezcla`.
 6. **Redactar la caption por separado** (no va en ninguna slide): mención del
    CTA hacia *El dolor que no te pertenece* + `https://eldolorquenotepertenece.com`
    sin UTM, luego los hashtags al final (2 fijos + 3 de tema). Para los 3 de
@@ -64,9 +82,10 @@ anuncios pagados.
    `ig-hashtag-strategist` sobre el tema de este carrusel.
 7. **Mostrar todo para aprobación** antes de generar ninguna imagen: estructura
    usada, estilo visual, protagonista elegido, texto de cada slide numerada
-   (marcando cuáles son "sin foto"), y la caption completa. Esperar
-   aprobación o ajustes — no gastar generación de imagen en un borrador sin
-   aprobar.
+   (marcando cuáles son "sin foto", y si el estilo es `mezcla`, marcando
+   además la clasificación foto/ilustración/diagrama de cada slide del paso
+   5b), y la caption completa. Esperar aprobación o ajustes — no gastar
+   generación de imagen en un borrador sin aprobar.
 8. **Guardar cada slide aprobada** como
    `Desktop/Posts Constelaciones/<hook> - Slide N.docx` (título/texto de esa
    slide en negrita en el primer párrafo), y la caption como
@@ -76,17 +95,27 @@ anuncios pagados.
    cualquiera de los últimos 2 usados: leer/actualizar
    `testing/copy_gen_state.json`, clave `"flat_color"`, mismo mecanismo de
    rotación que las demás categorías. Esto aplica igual sin importar el
-   estilo visual elegido en el paso 3.
+   estilo visual elegido en el paso 3. Si el estilo es `mezcla` y hay al
+   menos una slide de diagrama (paso 5b), elegir además un 3er color de
+   `BRAND_COLORS` para el fondo de esa(s) slide(s) de diagrama, distinto de
+   los otros 2 ya elegidos para hook/CTA (no participa de la rotación de
+   `testing/copy_gen_state.json`, se elige fresco cada vez que hace falta).
 10. **Generar el fondo de cada slide** por la tool de Bash, desde la raíz del
     repo:
     - **Slide 1 (hook) y última slide (CTA):**
       `python scripts/generate_post_image.py "<ruta a esa slide>" --flat-color "<color elegido>"`
       — sin foto/ilustración, sin llamar a Gemini, instantáneo, igual sin
       importar el estilo visual.
-    - **Todas las slides intermedias (incluida "Para asentar"):**
+    - **Todas las slides intermedias (incluida "Para asentar"), si el estilo
+      NO es `mezcla`:**
       `python scripts/generate_post_image.py "<ruta a esa slide>" --protagonist "<descripción del paso 4>" --visual-style <estilo del paso 3>`
       — omitir `--visual-style` por completo si el estilo es `photo`
       (comportamiento idéntico al de antes de esta función).
+    - **Si el estilo es `mezcla`, cada slide intermedia según su
+      clasificación del paso 5b:**
+      - `foto` → `python scripts/generate_post_image.py "<ruta a esa slide>" --protagonist "<descripción del paso 4>"` (sin `--visual-style`, foto de siempre).
+      - `ilustración` → `python scripts/generate_post_image.py "<ruta a esa slide>" --visual-style mezcla-ilustracion` — **sin `--protagonist`**, esta pierna es deliberadamente sin personas (ver `mixed_visual_style.md`).
+      - `diagrama` → `python scripts/generate_diagram_image.py "<ruta de salida .png para esa slide>" --items-json '["item 1", "item 2", ...]' --flat-color "<3er color del paso 9>"` — extraer los items del propio texto de la slide (si ya es una lista, usar cada punto; si no, dividir la idea central en 2-4 sub-puntos breves), 2 a 6 items. No llama a Gemini.
     - No generar imagen para el archivo de caption.
 11. **Mostrar el resultado**: las N imágenes generadas (tool de Read) en
     orden de slide, la caption final, y el recordatorio de que el texto de
@@ -95,7 +124,11 @@ anuncios pagados.
     cartel amarillo/naranja centrado + cierre en script dorado pálido
     centrado, con la posición vertical del bloque ajustada a mano por slide
     según su encuadre para no tapar la cara) — sin ninguna firma ni
-    atribución de marca en ninguna slide, eliminada por completo.
+    atribución de marca en ninguna slide, eliminada por completo. Las slides
+    de diagrama (estilo `mezcla`) ya traen su propio texto de items dibujado
+    en la imagen — el titular corto de Canva sigue yendo arriba, en el
+    margen que el diagrama deja vacío a propósito, nunca duplicando el
+    contenido de los items.
 
 ## Reglas duras
 
@@ -112,9 +145,19 @@ anuncios pagados.
 - El protagonista elegido debe pasarse igual en todas las llamadas con
   foto/ilustración de un mismo carrusel — nunca generar esa slide sin
   `--protagonist`.
-- El estilo visual (`photo` o uno de los 4 ilustrados) es siempre elección
-  explícita del usuario, nunca automática ni rotada. Combina con cualquiera
-  de las 5 estructuras narrativas — son ejes independientes.
+- El estilo visual (`photo`, uno de los 4 ilustrados, o `mezcla`) es siempre
+  elección explícita del usuario, nunca automática ni rotada. Combina con
+  cualquiera de las 5 estructuras narrativas — son ejes independientes.
+- `mezcla` es un estilo alternativo opt-in: sin nombrarlo explícitamente, el
+  carrusel se comporta exactamente igual que antes de que este estilo
+  existiera. Nunca se activa por inferencia ni se sugiere como default.
+- En `mezcla`, el reparto 60/30/10 aplica solo a las slides de contenido
+  (nunca al hook ni al CTA, que siguen siendo quote card plana) y sigue el
+  método de mayor resto de `mixed_visual_style.md`, nunca una asignación al
+  azar. Las slides `ilustración` y `diagrama` nunca llevan `--protagonist` ni
+  representan personas — ver `mixed_visual_style.md` para el porqué
+  (consistencia visual + evitar cualquier riesgo de calidad de rostro con
+  Gemini).
 - Nunca pedir la API key de Gemini ni el comando de Python al usuario.
 - No generar ninguna imagen antes de que el usuario apruebe el texto completo
   (todas las slides + caption).
@@ -140,11 +183,21 @@ anuncios pagados.
   título/texto de slide para el paso manual en Canva, y la regla de que no
   se agrega firma.
 - `../../scripts/references/illustration_style.md` — los 4 estilos
-  ilustrados (`minimal`, `book`, `cartoon`, `storytelling`) y su límite de
-  consistencia entre slides conocido (ver ese archivo).
+  ilustrados con protagonista (`minimal`, `book`, `cartoon`, `storytelling`)
+  y su límite de consistencia entre slides conocido (ver ese archivo), más
+  `mezcla-ilustracion` (la pierna de ilustración sin persona del estilo
+  `mezcla`).
+- `../../scripts/references/mixed_visual_style.md` — la regla completa del
+  estilo `mezcla` (60/30/10): alcance, heurística de clasificación,
+  apportionment con empates, y por qué ilustración/diagrama van sin
+  protagonista. Compartida con `seleccion-clips-pexels`.
 - `../../scripts/generate_post_image.py` — genera cada fondo; `--protagonist`
   para consistencia de persona, `--flat-color` para las slides sin foto,
-  `--visual-style` para elegir entre fotográfico o uno de los 4 ilustrados.
+  `--visual-style` para elegir entre fotográfico, uno de los 4 ilustrados, o
+  `mezcla-ilustracion`.
+- `../../scripts/generate_diagram_image.py` — genera las slides de diagrama
+  del estilo `mezcla`: lista numerada vertical con Pillow puro (sin Gemini,
+  texto siempre legible), reutiliza `BRAND_COLORS`/`--flat-color`.
 - `testing/copy_gen_state.json` — estado de rotación de estructura y de
   color plano (claves `"carousel_structure"` y `"flat_color"`; se autogenera).
 

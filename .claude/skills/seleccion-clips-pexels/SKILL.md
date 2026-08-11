@@ -1,6 +1,6 @@
 ---
 name: seleccion-clips-pexels
-description: Given a full reel voice-over script (guion) for Constelaciones Familiares, split it into 6-8 key emotional moments and write specific brand-consistent English search terms per moment (warm domestic scenes, everyday women, no literal metaphor objects -- same vocabulary as scripts/references/image_prompt_style.md). Picks ONE protagonist author with the best Pexels coverage (Videos AND Photos APIs) across the whole reel, excluding studio/preset accounts by name, then searches every moment restricted to that author only. If she has nothing solo for a moment, tries her accompanied by others (still her, relaxed search terms), then a faceless cutaway detail shot (hands, a mug, a window, domestic texture), and only then falls back to a different author -- each tier labeled explicitly in the summary. If the user also gives the reel's rewritten on-screen hook text (distinct from the guion's literal first line), searches and downloads a SEPARATE dedicated clip for it -- own search terms, own tier cascade, own entry in orden_edicion.txt ("Momento gancho"), never mixed into moment 1. Downloads candidates, runs a mandatory ffmpeg frame-by-frame visual review (scene/emotion fit, brand setting, AND face/appearance consistency of the protagonist) before showing results, swapping or dropping weak candidates instead of forcing them. Saves to scripts/output_clips/<reel>/ plus an orden_edicion.txt. Use for "selecciona clips para el reel de [tema]", "busca B-roll para este guion". Not for writing the reel script itself (write it first, then paste it here), not for still cover photos (use imagen-post-constelaciones), and not for carousels/posts/stories (use carrusel-constelaciones, post-constelaciones, historias-constelaciones).
+description: Given a full reel voice-over script (guion) for Constelaciones Familiares, split it into 6-8 key emotional moments and write specific brand-consistent English search terms per moment (warm domestic scenes, everyday women, no literal metaphor objects -- same vocabulary as scripts/references/image_prompt_style.md). Picks ONE protagonist author with the best Pexels coverage (Videos AND Photos APIs) across the whole reel, excluding studio/preset accounts by name, then searches every moment restricted to that author only. If she has nothing solo for a moment, tries her accompanied by others (still her, relaxed search terms), then a faceless cutaway detail shot (hands, a mug, a window, domestic texture), and only then falls back to a different author -- each tier labeled explicitly in the summary. If the user also gives the reel's rewritten on-screen hook text (distinct from the guion's literal first line), searches and downloads a SEPARATE dedicated clip for it -- own search terms, own tier cascade, own entry in orden_edicion.txt ("Momento gancho"), never mixed into moment 1. Downloads candidates, runs a mandatory ffmpeg frame-by-frame visual review (scene/emotion fit, brand setting, AND face/appearance consistency of the protagonist) before showing results, swapping or dropping weak candidates instead of forcing them. Saves to scripts/output_clips/<reel>/ plus an orden_edicion.txt. Optional opt-in "--visual-mix" / "con mezcla visual" mode mixes 60% Pexels / 30% flat conceptual illustration / 10% diagram across the 6-8 moments instead of 100% Pexels (see scripts/references/mixed_visual_style.md) -- generates the non-Pexels moments locally (Gemini for illustration, Pillow for diagrams, both faceless) and writes them into the same orden_edicion.txt format; default behavior without this flag is 100% unchanged. Use for "selecciona clips para el reel de [tema]", "busca B-roll para este guion". Not for writing the reel script itself (write it first, then paste it here), not for still cover photos (use imagen-post-constelaciones), and not for carousels/posts/stories (use carrusel-constelaciones, post-constelaciones, historias-constelaciones).
 ---
 
 # Selección de clips Pexels (B-roll para reels)
@@ -18,6 +18,10 @@ Canva/CapCut.
 - "selecciona clips para el reel de [tema]"
 - "busca B-roll para este guion"
 - "necesito video clips de Pexels para este reel: [guion pegado]"
+- Puede incluir el modo mezcla visual: "...con mezcla visual", "...estilo
+  60/30/10 para el reel de [tema]". Sin pedirlo, el comportamiento es 100%
+  Pexels, igual que siempre. El modo mezcla es 100% opcional -- ver paso 3b
+  del Flujo y `../../scripts/references/mixed_visual_style.md`.
 
 No se activa para redactar el guion en sí (eso se escribe antes, a mano o en
 otra conversación), ni para imágenes fijas de portada (`imagen-post-
@@ -119,6 +123,18 @@ no solo autoría.
      `guion_line` del momento 1. `cutaway_terms` para el gancho es opcional,
      igual que en los momentos.
 
+3b. **Si el usuario pidió mezcla visual (`--visual-mix`):** clasificar cada
+   uno de los 6-8 momentos (nunca el gancho, que siempre queda foto/video de
+   Pexels igual que hoy) en `foto` / `ilustración` / `diagrama`, siguiendo la
+   heurística y el reparto 60/30/10 exactos de
+   `../../scripts/references/mixed_visual_style.md` (narrativo/emocional ->
+   foto, conceptual explicativo -> ilustración, estructurado/enumerado ->
+   diagrama; método de mayor resto con empate foto > ilustración > diagrama;
+   no forzar un diagrama con pocos momentos). Guardar la clasificación de
+   cada momento como `"visual_type"` en el JSON del paso 4 (ver ahí). Si no
+   se pidió mezcla visual, este paso no existe -- se omite entero y ningún
+   momento lleva `"visual_type"`.
+
 4. **Guardar el análisis en JSON** en
    `testing/pexels_moments/<reel_slug>.json` (crear la carpeta si no
    existe) con esta forma exacta:
@@ -137,18 +153,31 @@ no solo autoría.
          "label": "culpa",
          "guion_line": "línea exacta del guion para este momento",
          "search_terms": ["term one", "term two", "term three"],
-         "cutaway_terms": ["detail term one", "detail term two"]
+         "cutaway_terms": ["detail term one", "detail term two"],
+         "visual_type": "photo"
        }
      ]
    }
    ```
    La clave `"hook"` es **opcional** -- solo va si el usuario dio texto de
    gancho en el paso 1. Sin ella, el comportamiento es idéntico al de antes
-   de esta función (ningún clip de gancho se busca ni se descarga).
+   de esta función (ningún clip de gancho se busca ni se descarga). La clave
+   `"visual_type"` por momento (`"photo"` / `"illustration"` / `"diagram"`)
+   es **igual de opcional** -- solo va si el paso 3b clasificó ese momento
+   (modo mezcla visual). Sin ella (comportamiento normal), el momento es
+   foto/video de Pexels como siempre; `search_pexels_clips.py` nunca lee esta
+   clave, es solo una nota para esta misma skill en el paso 5.
 
-5. **Ejecutar el script** por la tool de Bash, desde la raíz del repo:
+5. **Ejecutar el script** por la tool de Bash, desde la raíz del repo. **Si
+   NO hay mezcla visual (comportamiento normal):**
    ```
    python scripts/search_pexels_clips.py "testing/pexels_moments/<reel_slug>.json"
+   ```
+   **Si hay mezcla visual (paso 3b), restringir a solo los momentos
+   clasificados `"photo"`** (el gancho, si existe, sigue procesándose siempre
+   -- nunca entra en la clasificación):
+   ```
+   python scripts/search_pexels_clips.py "testing/pexels_moments/<reel_slug>.json" --only <ordenes de los momentos "photo", ej. 1,2,4,6>
    ```
    El script:
    - Carga `PEXELS_API_KEY` de `.env` (si falta, la pide de forma interactiva
@@ -215,13 +244,54 @@ no solo autoría.
      tocar los 6-8 momentos) haciendo merge en el archivo existente, igual
      que `--only` para momentos numéricos -- se pueden combinar.
 
-6. **Revisión visual obligatoria antes de mostrarle nada al usuario.** El
-   script solo filtra por metadata (orientación, duración, autor) -- no
-   puede detectar si un clip realmente encaja ni si de verdad se ve la
-   misma persona. El clip del gancho (`00_gancho_*`), si lo hay, pasa por
-   esta misma revisión y los mismos 6 chequeos que cualquier momento -- no
-   es un gate distinto ni más liviano. Con la tool de Bash y `ffmpeg` (ya
-   disponible), extraer un frame de cada clip/foto descargado (para video:
+5b. **Si hay mezcla visual, generar los momentos `"illustration"` y
+   `"diagram"` que el paso 5 no cubrió** -- no vienen de Pexels, se generan
+   localmente por la tool de Bash, desde la raíz del repo, para cada momento
+   así clasificado:
+   - **`"illustration"`**: escribir la `guion_line` de ese momento a un
+     archivo temporal `.txt` (ej.
+     `testing/pexels_moments/<reel_slug>_tmp_NN.txt`), luego:
+     `python scripts/generate_post_image.py "<ese .txt>" --visual-style mezcla-ilustracion --aspect 9:16 --out-dir scripts/output_clips/<reel_slug>`
+     -- **sin `--protagonist`**, esta pierna es deliberadamente sin personas
+     (ver `mixed_visual_style.md`). Renombrar el `.png` resultante a
+     `NN_<label>_a.png` dentro de la misma carpeta.
+   - **`"diagram"`**: elegir un color de `BRAND_COLORS` distinto al usado por
+     el protagonista/gancho de este reel (no hay slides tipo quote card en
+     reel, así que no hay rotación previa que evitar -- cualquier color
+     distinto sirve), y correr directo con el nombre final:
+     `python scripts/generate_diagram_image.py "scripts/output_clips/<reel_slug>/NN_<label>_a.png" --items-json '["item 1", "item 2", ...]' --flat-color "<color elegido>" --aspect 9:16`
+     -- extraer los items de la `guion_line` de ese momento (si ya enumera
+     puntos, usar cada uno; si no, dividir la idea en 2-4 sub-puntos breves),
+     2 a 6 items. No llama a Gemini.
+   - **Agregar el bloque de cada momento generado a
+     `scripts/output_clips/<reel_slug>/orden_edicion.txt`** (crear el
+     archivo si el paso 5 no corrió para ningún momento `"photo"`), con el
+     mismo formato exacto que escribe `search_pexels_clips.py` para que
+     `render_reel_json2video.py` lo parsee igual -- el orden dentro del
+     archivo no importa, el parser ordena por el número de `Momento NN`:
+     ```
+     Momento NN -- <label>
+       Línea del guion: <guion_line de ese momento>
+       Términos usados: N/A (generado, no buscado en Pexels)
+       NN_<label>_a.png -- autor: Generado (ilustración de marca, sin protagonista)
+     ```
+     (para diagrama, cambiar la última línea a
+     `-- autor: Generado (diagrama de marca)`). Dejar una línea en blanco
+     entre bloques, igual que el resto del archivo.
+
+6. **Revisión visual antes de mostrarle nada al usuario.** Para los momentos
+   `"photo"` (y el gancho) el script solo filtra por metadata (orientación,
+   duración, autor) -- no puede detectar si un clip realmente encaja ni si de
+   verdad se ve la misma persona; esos SIEMPRE pasan por la revisión completa
+   de 6 chequeos de abajo. Los momentos `"illustration"`/`"diagram"` del paso
+   5b son generación determinística sin persona, así que no aplican los
+   chequeos de rostro/consistencia -- alcanza con abrir la imagen (tool de
+   Read) y confirmar que no haya texto cortado, mal renderizado, o un
+   diagrama con items pisándose. El clip del gancho (`00_gancho_*`), si lo
+   hay, pasa por esta misma revisión y los mismos 6 chequeos que cualquier
+   momento -- no es un gate distinto ni más liviano. Con la tool de Bash y
+   `ffmpeg` (ya disponible), extraer un frame de cada clip/foto descargado
+   (para video:
    `ffmpeg -y -ss 1.5 -i
    archivo.mp4 -vframes 1 -vf scale=270:480:force_original_aspect_ratio=
    decrease,pad=270:480:(ow-iw)/2:(oh-ih)/2:color=black salida.jpg`; para
@@ -276,7 +346,9 @@ no solo autoría.
    con menos candidatos de lo normal (para que el usuario los busque a mano
    o grabe su propio footage si lo necesita). Si había gancho, mencionar por
    separado si su clip dedicado se resolvió bien o con qué advertencia (nivel
-   de la cascada, o sin candidatos).
+   de la cascada, o sin candidatos). Si hubo mezcla visual, mostrar además el
+   reparto final foto/ilustración/diagrama por momento (paso 3b) junto al
+   resto del resumen.
 
 ## Reglas duras
 
@@ -316,12 +388,26 @@ no solo autoría.
   cupo de 1-3 por momento -- si ninguna opción pasa los 5 chequeos visuales
   tras varias rondas, dejar el momento con menos candidatos y anotarlo, en
   vez de entregar un clip que no sirve.
+- **La mezcla visual (`--visual-mix`) es un modo alternativo opt-in.** Sin
+  pedirla explícitamente, el reel es 100% Pexels, exactamente igual que antes
+  de que este modo existiera -- nunca se activa por inferencia.
+- En mezcla visual, el reparto 60/30/10 aplica solo a los 6-8 momentos
+  narrados (nunca al gancho, que siempre es Pexels) y sigue el método de
+  mayor resto de `mixed_visual_style.md`, nunca una asignación al azar. Los
+  momentos `illustration`/`diagram` nunca representan personas -- ver
+  `mixed_visual_style.md` para el porqué (consistencia visual entre un
+  protagonista real de Pexels y uno dibujado, más evitar cualquier riesgo de
+  calidad de rostro con Gemini).
 
 ## Recursos
 
 - `../../scripts/references/image_prompt_style.md` -- vocabulario visual de
   marca (ambientes, tono cálido, traducción conceptual de la emoción) que
   informa los términos de búsqueda.
+- `../../scripts/references/mixed_visual_style.md` -- la regla completa del
+  modo mezcla visual (60/30/10): alcance, heurística de clasificación,
+  apportionment con empates, y por qué ilustración/diagrama van sin
+  protagonista. Compartida con `carrusel-constelaciones`.
 - `../../scripts/search_pexels_clips.py` -- elige protagonista (Videos +
   Photos), busca por momento restringido a ese autor con la cascada de 4
   niveles, filtra, descarga y genera `orden_edicion.txt`. Acepta `--only
@@ -332,6 +418,12 @@ no solo autoría.
   de ajustar `cutaway_terms` o `search_terms` de un momento puntual -- y
   `--hook-only` para reprocesar solo el clip del gancho (requiere `"hook"`
   en el JSON), combinable con `--only`.
+- `../../scripts/generate_post_image.py` -- genera los momentos
+  `"illustration"` de la mezcla visual con `--visual-style
+  mezcla-ilustracion` (sin `--protagonist`).
+- `../../scripts/generate_diagram_image.py` -- genera los momentos
+  `"diagram"` de la mezcla visual: lista numerada vertical con Pillow puro
+  (sin Gemini, texto siempre legible).
 - `testing/pexels_moments/` -- JSON intermedio por reel (gitignored).
 - `scripts/output_clips/` -- clips/fotos descargados por reel (gitignored,
   son binarios, no se suben al repo).

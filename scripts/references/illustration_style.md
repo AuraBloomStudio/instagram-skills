@@ -63,11 +63,39 @@ Cartoon illustration: flat-color cartoon style with expressive, slightly exagger
 Sequential-panel illustration: one panel of an ongoing illustrated mini-story, drawn in a consistent cartoon/storybook style meant to match the rest of this carousel -- same character design, same color palette, same linework style as if pages of the same comic. This panel depicts one distinct beat of the story progressing forward, not a repeated pose or a generic scene. No on-image text, no panel borders or comic-style gutters -- the image itself is the panel.
 <!-- END:STYLE_STORYTELLING -->
 
+## MEZCLA_ILUSTRACION_ANALYSIS_RULES (injected into the emotion/theme analysis step)
+
+Used only by `--visual-style mezcla-ilustracion`, the "flat infographic
+illustration" leg of the 60/30/10 mixed visual style (see
+`mixed_visual_style.md`). Deliberately a DIFFERENT contract from
+`ILLUSTRATION_ANALYSIS_RULES` above: that block forces one or more human
+characters and forbids symbolic objects; this one does the opposite -- no
+people, no faces, conceptual/iconographic objects are the whole point. No
+`__PROTAGONIST__` placeholder here on purpose -- this style is deliberately
+faceless, so nothing in the mixed-style flow ever needs to pass
+`--protagonist` for it (harmless no-op if it is passed anyway, since
+`_protagonist_instruction`'s output has no token to land on in this block).
+
+<!-- BEGIN:MEZCLA_ILUSTRACION_ANALYSIS_RULES -->
+The visual_concept_en you write MUST be a flat, conceptual illustration built from objects, icons, or simple symbolic scenery that represents the copy's core idea -- NOT a human figure, face, silhouette, or any character. This is the opposite instruction from a normal photo/character illustration: here a symbolic object IS the subject, not a stand-in to avoid.
+
+Keep the concept simple and legible at a glance -- one clear visual idea (e.g. a house with a warm glow, an open window with light coming through, a small potted plant growing, two overlapping circles, a path or arrow motif), not a busy or literal scene. No text, letters, or numbers in the visual_concept_en itself -- any numbers/labels for a diagram are handled separately by generate_diagram_image.py, not this style.
+
+Leave the upper ~20-25% of the composition visually quiet (plain background, soft gradient, or open space) so a short title can be added afterward by hand in Canva, same negative-space convention as the photographic style.
+<!-- END:MEZCLA_ILUSTRACION_ANALYSIS_RULES -->
+
+## STYLE_MEZCLA_ILUSTRACION
+
+<!-- BEGIN:STYLE_MEZCLA_ILUSTRACION -->
+Flat infographic illustration style: clean flat-design vector illustration, like modern editorial or explainer-content graphics -- no photorealism, no painterly texture, no characters or people of any kind. Simple geometric shapes and rounded forms, bold flat color fills with little to no gradient or shading, generous negative space, minimal fine detail. Color palette limited to the brand's warm tones (chocolate, terracotta, gold, cream -- see BRAND_COLORS in image_prompt_style.md), used as flat fills, not photographic lighting. No on-image text.
+<!-- END:STYLE_MEZCLA_ILUSTRACION -->
+
 ## Changing the illustration styles later
 
-Edit `STYLE_MINIMAL`, `STYLE_BOOK`, `STYLE_CARTOON`, or `STYLE_STORYTELLING`
-for a pure look change, or `ILLUSTRATION_ANALYSIS_RULES` for how scenes get
-conceived. `scripts/generate_post_image.py` re-reads this file on every run.
-`--flat-color` and `BRAND_COLORS` (in `image_prompt_style.md`) are shared
-across every visual style, including these four -- the hook/CTA "quote card"
-slides don't change based on `--visual-style`.
+Edit `STYLE_MINIMAL`, `STYLE_BOOK`, `STYLE_CARTOON`, `STYLE_STORYTELLING`, or
+`STYLE_MEZCLA_ILUSTRACION` for a pure look change, or
+`ILLUSTRATION_ANALYSIS_RULES` / `MEZCLA_ILUSTRACION_ANALYSIS_RULES` for how
+scenes get conceived. `scripts/generate_post_image.py` re-reads this file on
+every run. `--flat-color` and `BRAND_COLORS` (in `image_prompt_style.md`) are
+shared across every visual style, including all five illustrated ones -- the
+hook/CTA "quote card" slides don't change based on `--visual-style`.

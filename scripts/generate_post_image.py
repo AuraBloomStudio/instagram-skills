@@ -26,13 +26,18 @@ instead renders a solid or gradient background from BRAND_COLORS in
 image_prompt_style.md -- used for "quote card" carousel slides that carry no
 photo, just text added later in Canva.
 
---visual-style <photo|minimal|book|cartoon|storytelling> switches the whole
-prompt pipeline. "photo" (the default) is completely unchanged: warm
-cinematic photography per image_prompt_style.md. Any other value reads
-scripts/references/illustration_style.md instead -- a separate, simpler rule
-set for line-art, storybook, cartoon, or sequential-panel illustration, since
-the photographic file's anonymity/composition/setting rotation is specific to
-photorealism and doesn't map cleanly onto illustrated characters.
+--visual-style <photo|minimal|book|cartoon|storytelling|mezcla-ilustracion>
+switches the whole prompt pipeline. "photo" (the default) is completely
+unchanged: warm cinematic photography per image_prompt_style.md. minimal/
+book/cartoon/storytelling read scripts/references/illustration_style.md
+instead -- a separate, simpler rule set for line-art, storybook, cartoon, or
+sequential-panel illustration, since the photographic file's anonymity/
+composition/setting rotation is specific to photorealism and doesn't map
+cleanly onto illustrated characters. "mezcla-ilustracion" also reads
+illustration_style.md but is a deliberately different, faceless leg used by
+the 60/30/10 mixed visual style (see references/mixed_visual_style.md): flat
+conceptual/iconographic illustration with NO people, so it never needs
+--protagonist.
 
 The visual style (lighting, composition options, how metaphors get reinterpreted)
 for photography lives entirely in scripts/references/image_prompt_style.md,
@@ -109,6 +114,20 @@ VISUAL_STYLES = {
     "book": "STYLE_BOOK",
     "cartoon": "STYLE_CARTOON",
     "storytelling": "STYLE_STORYTELLING",
+    "mezcla-ilustracion": "STYLE_MEZCLA_ILUSTRACION",
+}
+# Which ILLUSTRATION_ANALYSIS_RULES-style block in illustration_style.md
+# supplies the analysis-step instructions for each non-photo style. The
+# original 4 character styles all share ILLUSTRATION_ANALYSIS_RULES (forces a
+# human figure, needs __PROTAGONIST__); mezcla-ilustracion is the opposite
+# contract (no people, no __PROTAGONIST__ token at all) and gets its own block
+# -- see illustration_style.md for why.
+ILLUSTRATION_ANALYSIS_BLOCKS = {
+    "minimal": "ILLUSTRATION_ANALYSIS_RULES",
+    "book": "ILLUSTRATION_ANALYSIS_RULES",
+    "cartoon": "ILLUSTRATION_ANALYSIS_RULES",
+    "storytelling": "ILLUSTRATION_ANALYSIS_RULES",
+    "mezcla-ilustracion": "MEZCLA_ILUSTRACION_ANALYSIS_RULES",
 }
 DEFAULT_VISUAL_STYLE = "photo"
 STATE_PATH = REPO_ROOT / "testing" / "image_gen_state.json"
@@ -191,9 +210,8 @@ def load_illustration_style(visual_style: str) -> dict:
     if not ILLUSTRATION_STYLE_PATH.exists():
         raise GenerationError(f"No existe el archivo de estilo: {ILLUSTRATION_STYLE_PATH}")
     text = ILLUSTRATION_STYLE_PATH.read_text(encoding="utf-8")
-    analysis_rules = _extract_marked_block(
-        text, "ILLUSTRATION_ANALYSIS_RULES", ILLUSTRATION_STYLE_PATH
-    )
+    analysis_block_name = ILLUSTRATION_ANALYSIS_BLOCKS[visual_style]
+    analysis_rules = _extract_marked_block(text, analysis_block_name, ILLUSTRATION_STYLE_PATH)
     style_block_name = VISUAL_STYLES[visual_style]
     style_suffix = _extract_marked_block(text, style_block_name, ILLUSTRATION_STYLE_PATH)
     return {"analysis_rules": analysis_rules, "style_suffix": style_suffix}

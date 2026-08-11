@@ -210,7 +210,12 @@ candidatos por momento (`_a`, `_b`, `_c`). El script toma automaticamente el
 primer candidato de video; si el momento no tiene ningun video (solo fotos),
 usa la primera foto y le aplica un efecto Ken Burns (zoom + pan) para que no
 quede estatica. No pide confirmacion antes de elegir -- si el usuario quiere
-otro candidato especifico, se le puede pasar aparte (ver Flujo, paso 4).
+otro candidato especifico, se le puede pasar aparte (ver Flujo, paso 4). Este
+script es agnostico al origen del archivo: un momento generado localmente por
+el modo mezcla visual opcional de `seleccion-clips-pexels` (ilustracion o
+diagrama, ambos `.png`) pasa por exactamente el mismo camino de foto + Ken
+Burns que una foto de Pexels -- ningun cambio de codigo hizo falta aqui para
+soportarlo.
 
 **Sincronizacion de duracion:** la duracion total de `narracion.mp3` se
 reparte entre los momentos en proporcion al numero de palabras de la linea
