@@ -16,8 +16,10 @@ deterministic and free to generate, same as --flat-color quote cards.
 
 The top ~22% of the canvas is left empty on purpose, matching the negative-
 space convention the photo/illustration styles use for their Canva title
-overlay (see canva_title_style.md) -- a short headline can still be added by
-hand on top of a diagram slide without colliding with the diagram itself.
+overlay (see canva_title_style.md). --headline-main (+ optional
+--headline-accent) bakes a short title into that exact margin with Pillow
+(reusing generate_post_image.py's render_headline) instead of adding it by
+hand afterward; omitting it leaves the margin empty as before.
 
 Usage:
   python scripts/generate_diagram_image.py "scripts/output_clips/mi_reel/03_senales_a.png" \\
@@ -29,27 +31,27 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from io import BytesIO
 from pathlib import Path
 
-import requests
 from PIL import Image, ImageDraw, ImageFont
 
-# Reuse BRAND_COLORS parsing and the solid/gradient background renderer
-# instead of duplicating that regex/logic -- both scripts live in the same
-# directory, so a plain import works when run as `python
+# Reuse BRAND_COLORS parsing, the solid/gradient background renderer, the
+# font-download cache, the text-wrap helper, and the headline baking/face-
+# safe-zone machinery instead of duplicating any of it here -- both scripts
+# live in the same directory, so a plain import works when run as `python
 # scripts/generate_diagram_image.py` from the repo root.
 from generate_post_image import (
     ASPECT_RATIO_SPECS,
     DEFAULT_ASPECT_RATIO,
+    FONT_CACHE_DIR,
     GenerationError,
+    _download_font,
+    _wrap_text,
     load_style_guide,
     render_flat_color_image,
+    render_headline,
     select_brand_color,
 )
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
-FONT_CACHE_DIR = REPO_ROOT / "testing" / "fonts"
 
 # Same google/fonts raw-GitHub hosting pattern already used for
 # HOOK_ACCENT_FONT_URL in render_reel_json2video.py (there it's handed to
@@ -74,17 +76,6 @@ LIGHT_TEXT_RGB = (243, 233, 216)
 DARK_TEXT_RGB = (75, 58, 48)
 
 
-def _download_font(url: str, dest: Path) -> Path:
-    if dest.exists():
-        return dest
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    resp = requests.get(url, timeout=30)
-    if resp.status_code >= 400:
-        raise GenerationError(f"No se pudo descargar la fuente {url}: HTTP {resp.status_code}")
-    dest.write_bytes(resp.content)
-    return dest
-
-
 def load_fonts(number_size: int, text_size: int) -> dict:
     bold_path = _download_font(POPPINS_BOLD_URL, FONT_CACHE_DIR / "Poppins-Bold.ttf")
     semibold_path = _download_font(POPPINS_SEMIBOLD_URL, FONT_CACHE_DIR / "Poppins-SemiBold.ttf")
@@ -102,23 +93,6 @@ def _relative_luminance(rgb: tuple) -> float:
 def _text_color_for_background(color: dict) -> tuple:
     top_rgb = color["colors"][0]
     return DARK_TEXT_RGB if _relative_luminance(top_rgb) > 0.5 else LIGHT_TEXT_RGB
-
-
-def _wrap_text(draw: "ImageDraw.ImageDraw", text: str, font: "ImageFont.FreeTypeFont", max_width: int) -> list:
-    words = text.split()
-    if not words:
-        return [""]
-    lines = []
-    current = words[0]
-    for word in words[1:]:
-        candidate = f"{current} {word}"
-        if draw.textlength(candidate, font=font) <= max_width:
-            current = candidate
-        else:
-            lines.append(current)
-            current = word
-    lines.append(current)
-    return lines
 
 
 def render_diagram(items: list, color: dict, size: tuple) -> "Image.Image":
@@ -223,7 +197,23 @@ def main() -> int:
         choices=sorted(ASPECT_RATIO_SPECS),
         help=f"Aspect ratio de salida (default: {DEFAULT_ASPECT_RATIO}). 9:16 para momentos de reel.",
     )
+    parser.add_argument(
+        "--headline-main",
+        default=None,
+        help="Titular corto a quemar en el margen superior ya reservado (mismo "
+        "renderer que generate_post_image.py). Sin esta opción, comportamiento "
+        "idéntico al de antes: el margen queda vacío para agregar texto a mano.",
+    )
+    parser.add_argument(
+        "--headline-accent",
+        default=None,
+        help="Línea de cierre opcional, más corta, debajo de --headline-main. "
+        "Requiere --headline-main.",
+    )
     args = parser.parse_args()
+    if args.headline_accent and not args.headline_main:
+        print("--headline-accent requiere --headline-main.", file=sys.stderr)
+        return 1
 
     try:
         items = json.loads(args.items_json)
@@ -242,6 +232,10 @@ def main() -> int:
         color = select_brand_color(args.flat_color, style["brand_colors"])
         print(f"Generando diagrama ({len(items)} items, color: {color['label']})...")
         image = render_diagram(items, color, output_size)
+        if args.headline_main:
+            # No protagonist in a diagram -- always the reserved top margin,
+            # no OpenCV face check needed (same reasoning as mezcla-ilustracion).
+            image = render_headline(image, "top", args.headline_main, args.headline_accent)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         image.save(out_path, "PNG")
         print(f"Imagen guardada en: {out_path} ({output_size[0]}x{output_size[1]})")

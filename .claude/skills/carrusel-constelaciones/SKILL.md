@@ -1,15 +1,16 @@
 ---
 name: carrusel-constelaciones
-description: Draft a multi-slide organic Instagram/Facebook carousel for Constelaciones Familiares in one of 5 structures (narrativo problema-explicación-Para asentar-CTA, lista de comportamientos, antes/después, autodiagnóstico, mini-historia con giro), following the brand voice in scripts/references/constelaciones_brand_voice.md. Writes slide-by-slide on-image text (second-to-last slide is always "Para asentar", last slide is always the book CTA) plus a separate caption with the CTA link and 2 fixed + 3 topic hashtags. Keeps one consistent protagonist (gender/age presentation) across all illustrated/photo slides of the same carousel, and gives the hook slide and CTA slide a flat brand-color "quote card" background instead of a photo. Supports 6 visual styles -- photo (default, cinematic realism), 4 illustrated styles (minimal line-art, storybook, cartoon, sequential-panel storytelling), or the opt-in "mezcla" style that mixes 60% photo / 30% flat conceptual illustration / 10% diagram across the content slides of the SAME carousel instead of one style for all of them (see scripts/references/mixed_visual_style.md) -- chosen explicitly by the user, never auto-rotated. On approval, saves each slide as .docx in Desktop/Posts Constelaciones and generates each slide's background by running scripts/generate_post_image.py (or scripts/generate_diagram_image.py for a diagram slide in "mezcla") once per slide, saved to Desktop/Imagenes Posts. Use for "hazme un carrusel de [tema]", "necesito un carrusel sobre [tema]", optionally with a visual style named ("...estilo minimalista/tipo libro/caricatura/storytelling/mezcla..."). Not for single-image posts (use post-constelaciones) or paid ads (future ads-constelaciones).
+description: Draft a multi-slide organic Instagram/Facebook carousel for Constelaciones Familiares in one of 5 structures (narrativo problema-explicación-Para asentar-CTA, lista de comportamientos, antes/después, autodiagnóstico, mini-historia con giro), following the brand voice in scripts/references/constelaciones_brand_voice.md, with the first content slide always carrying the carousel's strongest pain beat, never a generic opener. Writes slide-by-slide on-image text (second-to-last slide is always "Para asentar", last slide is always the book CTA) plus a separate caption with the CTA link and 2 fixed + 3 topic hashtags. Keeps one consistent protagonist (gender/age presentation) AND one fixed setting/light source across all photo slides of the same carousel, and gives the hook slide and CTA slide a flat brand-color "quote card" background instead of a photo. Bakes a short headline (+ optional accent line) directly onto every generated slide with Pillow -- Anton poster-style main phrase + Playfair Display italic accent, same colors as canva_title_style.md -- placed in whichever third of the frame an OpenCV face check confirms is clear of the protagonist's face (needs opencv-python), so no slide ships without legible on-image text and no manual Canva pass is required for it. Supports 6 visual styles -- photo (default, cinematic realism), 4 illustrated styles (minimal line-art, storybook, cartoon, sequential-panel storytelling), or the opt-in "mezcla" style that mixes 60% photo / 30% flat conceptual illustration / 10% diagram across the content slides of the SAME carousel instead of one style for all of them (see scripts/references/mixed_visual_style.md) -- chosen explicitly by the user, never auto-rotated. On approval, saves each slide as .docx in Desktop/Posts Constelaciones and generates each slide's finished image (background + baked headline) by running scripts/generate_post_image.py (or scripts/generate_diagram_image.py for a diagram slide in "mezcla") once per slide, saved to Desktop/Imagenes Posts. Use for "hazme un carrusel de [tema]", "necesito un carrusel sobre [tema]", optionally with a visual style named ("...estilo minimalista/tipo libro/caricatura/storytelling/mezcla..."). Not for single-image posts (use post-constelaciones) or paid ads (future ads-constelaciones).
 ---
 
 # Carrusel Constelaciones (multi-slide)
 
 Redacta un carrusel orgánico para Constelaciones Familiares: elige
-estructura, escribe el texto de cada slide más una caption separada, lo
-aprueba el usuario, guarda cada slide como `.docx`, y genera el fondo de
-cada slide reutilizando `scripts/generate_post_image.py` una vez por slide
-(foto para el contenido, color plano para el hook y el CTA).
+estructura, escribe el texto de cada slide (más un titular corto por slide
+para quemar en la imagen) más una caption separada, lo aprueba el usuario,
+guarda cada slide como `.docx`, y genera la imagen final de cada slide
+(fondo + titular quemado) reutilizando `scripts/generate_post_image.py` una
+vez por slide (foto para el contenido, color plano para el hook y el CTA).
 
 ## Cuándo se activa
 
@@ -64,7 +65,26 @@ anuncios pagados.
    (penúltima) → CTA del libro (última). El CTA de la última slide debe
    incluir la frase-puente obligatoria (ver regla "Bridge required before the
    CTA" en `constelaciones_brand_voice.md`) + mención del libro — el link
-   plano NO va en la slide, solo en la caption.
+   plano NO va en la slide, solo en la caption. La slide 2 (primera de
+   contenido, justo después del hook) tiene que ser el beat más fuerte del
+   dolor central del carrusel, nunca una pregunta o dato genérico de
+   arranque — ver regla "First content slide carries the strongest pain
+   (mandatory)" en `CAROUSEL_STRUCTURES`, con el detalle de qué significa
+   para cada una de las 5 estructuras.
+5a. **Escribir un titular corto por slide (las 8), para quemar en la
+   imagen.** Distinto del texto completo de la slide del paso 5 (que se sigue
+   guardando entero en el `.docx`): `headline_main` son 3-8 palabras, la
+   frase de mayor impacto de esa slide, en mayúsculas cuando se muestre
+   (el script ya lo mayusculiza) — nunca la frase completa del paso 5 tal
+   cual si es larga, sino su versión más corta y directa. `headline_accent`
+   es **opcional**, una línea de cierre más breve todavía, solo cuando la
+   slide tiene un reencuadre natural de dos partes (el hook con su
+   contraste, "Para asentar" con su afirmación, el CTA con la mención del
+   libro después del bridge). Para el hook y el CTA, que ya son cortos por
+   convención de voz, `headline_main`/`headline_accent` normalmente COINCIDEN
+   con el texto del paso 5 o son un recorte mínimo — no hace falta
+   reinventarlos. Para las slides de contenido/"Para asentar" (frases más
+   largas), sí hace falta distilar de verdad.
 5b. **Si el estilo visual es `mezcla`, clasificar cada slide de contenido**
    (todas menos el hook y el CTA, que siguen siendo quote card plana) en
    `foto` / `ilustración` / `diagrama`, siguiendo la heurística y el reparto
@@ -82,10 +102,14 @@ anuncios pagados.
    `ig-hashtag-strategist` sobre el tema de este carrusel.
 7. **Mostrar todo para aprobación** antes de generar ninguna imagen: estructura
    usada, estilo visual, protagonista elegido, texto de cada slide numerada
-   (marcando cuáles son "sin foto", y si el estilo es `mezcla`, marcando
-   además la clasificación foto/ilustración/diagrama de cada slide del paso
-   5b), y la caption completa. Esperar aprobación o ajustes — no gastar
-   generación de imagen en un borrador sin aprobar.
+   junto con su `headline_main`/`headline_accent` del paso 5a (marcando
+   cuáles son "sin foto", y si el estilo es `mezcla`, marcando además la
+   clasificación foto/ilustración/diagrama de cada slide del paso 5b), y la
+   caption completa. El titular queda quemado en la imagen y no se edita
+   después a mano, así que tiene que aprobarse en este paso igual que el
+   resto del texto — nunca generar sin que el usuario haya visto ambos
+   (texto completo + titular) de cada slide. Esperar aprobación o ajustes —
+   no gastar generación de imagen en un borrador sin aprobar.
 8. **Guardar cada slide aprobada** como
    `Desktop/Posts Constelaciones/<hook> - Slide N.docx` (título/texto de esa
    slide en negrita en el primer párrafo), y la caption como
@@ -100,35 +124,46 @@ anuncios pagados.
    `BRAND_COLORS` para el fondo de esa(s) slide(s) de diagrama, distinto de
    los otros 2 ya elegidos para hook/CTA (no participa de la rotación de
    `testing/copy_gen_state.json`, se elige fresco cada vez que hace falta).
-10. **Generar el fondo de cada slide** por la tool de Bash, desde la raíz del
-    repo:
+10. **Generar la imagen final de cada slide** (fondo + titular quemado) por
+    la tool de Bash, desde la raíz del repo. **Todas** las llamadas llevan
+    `--headline-main "<headline_main del paso 5a>"` y, si esa slide tiene
+    accent, `--headline-accent "<headline_accent del paso 5a>"` — ninguna
+    slide se genera sin su titular:
     - **Slide 1 (hook) y última slide (CTA):**
-      `python scripts/generate_post_image.py "<ruta a esa slide>" --flat-color "<color elegido>"`
-      — sin foto/ilustración, sin llamar a Gemini, instantáneo, igual sin
-      importar el estilo visual.
+      `python scripts/generate_post_image.py "<ruta a esa slide>" --flat-color "<color elegido>" --headline-main "..." [--headline-accent "..."]`
+      — sin foto/ilustración, sin llamar a Gemini para la imagen en sí,
+      igual sin importar el estilo visual. El titular queda centrado en todo
+      el canvas (es el diseño entero de la slide, como siempre).
     - **Todas las slides intermedias (incluida "Para asentar"), si el estilo
       NO es `mezcla`:**
-      `python scripts/generate_post_image.py "<ruta a esa slide>" --protagonist "<descripción del paso 4>" --visual-style <estilo del paso 3>`
+      `python scripts/generate_post_image.py "<ruta a esa slide>" --protagonist "<descripción del paso 4>" --visual-style <estilo del paso 3> --headline-main "..." [--headline-accent "..."] [--setting "..."]`
       — omitir `--visual-style` por completo si el estilo es `photo`
-      (comportamiento idéntico al de antes de esta función).
+      (comportamiento idéntico al de antes de esta función en cuanto al
+      fondo). **Setting fijo entre slides de foto de un mismo carrusel:** en
+      la PRIMERA slide de foto del carrusel, omitir `--setting` (deja que
+      rote como siempre) y anotar el texto exacto que el script imprime como
+      "Ubicación elegida: ..."; en TODAS las slides de foto siguientes del
+      mismo carrusel, pasar `--setting "<ese mismo texto exacto>"` para que
+      compartan ambiente/fuente de luz. Solo aplica a slides con
+      `--visual-style photo` (o sin `--visual-style`, que es lo mismo) —
+      los 4 estilos ilustrados no tienen `SETTINGS`, se ignora si se pasa.
     - **Si el estilo es `mezcla`, cada slide intermedia según su
-      clasificación del paso 5b:**
-      - `foto` → `python scripts/generate_post_image.py "<ruta a esa slide>" --protagonist "<descripción del paso 4>"` (sin `--visual-style`, foto de siempre).
-      - `ilustración` → `python scripts/generate_post_image.py "<ruta a esa slide>" --visual-style mezcla-ilustracion` — **sin `--protagonist`**, esta pierna es deliberadamente sin personas (ver `mixed_visual_style.md`).
-      - `diagrama` → `python scripts/generate_diagram_image.py "<ruta de salida .png para esa slide>" --items-json '["item 1", "item 2", ...]' --flat-color "<3er color del paso 9>"` — extraer los items del propio texto de la slide (si ya es una lista, usar cada punto; si no, dividir la idea central en 2-4 sub-puntos breves), 2 a 6 items. No llama a Gemini.
+      clasificación del paso 5b** (la regla de `--setting` fijo de arriba
+      aplica igual a las slides clasificadas `foto` dentro de la mezcla):
+      - `foto` → `python scripts/generate_post_image.py "<ruta a esa slide>" --protagonist "<descripción del paso 4>" --headline-main "..." [--headline-accent "..."] [--setting "..."]` (sin `--visual-style`, foto de siempre).
+      - `ilustración` → `python scripts/generate_post_image.py "<ruta a esa slide>" --visual-style mezcla-ilustracion --headline-main "..." [--headline-accent "..."]` — **sin `--protagonist`**, esta pierna es deliberadamente sin personas (ver `mixed_visual_style.md`). El titular no necesita chequeo de rostro (no hay protagonista), va directo al margen superior.
+      - `diagrama` → `python scripts/generate_diagram_image.py "<ruta de salida .png para esa slide>" --items-json '["item 1", "item 2", ...]' --flat-color "<3er color del paso 9>" --headline-main "..." [--headline-accent "..."]` — extraer los items del propio texto de la slide (si ya es una lista, usar cada punto; si no, dividir la idea central en 2-4 sub-puntos breves), 2 a 6 items. No llama a Gemini para nada de esto (ni fondo ni titular).
     - No generar imagen para el archivo de caption.
 11. **Mostrar el resultado**: las N imágenes generadas (tool de Read) en
-    orden de slide, la caption final, y el recordatorio de que el texto de
-    cada slide se agrega después a mano en Canva sobre su fondo, siguiendo la
-    tipografía fija de `scripts/references/canva_title_style.md` (titular
-    cartel amarillo/naranja centrado + cierre en script dorado pálido
-    centrado, con la posición vertical del bloque ajustada a mano por slide
-    según su encuadre para no tapar la cara) — sin ninguna firma ni
-    atribución de marca en ninguna slide, eliminada por completo. Las slides
-    de diagrama (estilo `mezcla`) ya traen su propio texto de items dibujado
-    en la imagen — el titular corto de Canva sigue yendo arriba, en el
-    margen que el diagrama deja vacío a propósito, nunca duplicando el
-    contenido de los items.
+    orden de slide, ya con su titular quemado, y la caption final — sin
+    ningún paso manual de Canva pendiente para el texto (el titular ya está
+    en la imagen). Recordar igual que no se agrega firma de marca (nombre de
+    autor, @handle) a ninguna slide, eliminada por completo. Si alguna slide
+    de foto/ilustración con protagonista muestra el titular en una posición
+    que igual se ve forzada (el chequeo de OpenCV evita tapar la cara, pero
+    no garantiza la composición más elegante), avisar al usuario para que
+    decida si la regenera con otro `headline_main` más corto o la ajusta a
+    mano — no es un bloqueo, es una nota de calidad.
 
 ## Reglas duras
 
@@ -160,16 +195,27 @@ anuncios pagados.
   Gemini).
 - Nunca pedir la API key de Gemini ni el comando de Python al usuario.
 - No generar ninguna imagen antes de que el usuario apruebe el texto completo
-  (todas las slides + caption).
+  (todas las slides + caption + `headline_main`/`headline_accent` del paso 5a).
 - Las reglas de voz, cierre, CTA y hashtags viven únicamente en
   `constelaciones_brand_voice.md`; el estilo visual fotográfico únicamente en
   `image_prompt_style.md` (incluye `BRAND_COLORS`, compartido por todos los
   estilos); los 4 estilos ilustrados únicamente en `illustration_style.md`.
-- El título/texto de cada slide en Canva sigue siempre la tipografía fija de
-  `canva_title_style.md`; la posición vertical del bloque no es un valor
-  fijo — se ajusta a mano por slide según su encuadre para no tapar la cara
-  de la protagonista. Nunca se agrega firma de marca (nombre de autor,
-  @handle) a ninguna slide.
+- **Ninguna slide se genera sin `--headline-main`.** El titular queda
+  quemado en la imagen misma (Pillow, Anton + Playfair Display italic,
+  mismos colores que `canva_title_style.md`) — ya no es un paso manual de
+  Canva. Nunca se agrega firma de marca (nombre de autor, @handle) a
+  ninguna slide.
+- **Todas las slides de foto de un mismo carrusel comparten `--setting`**
+  (mismo ambiente/fuente de luz): la primera lo elige por rotación normal
+  (sin pasar `--setting`), todas las siguientes lo fijan al texto exacto que
+  esa primera llamada imprimió. Composición y ángulo de cámara siguen
+  rotando libres por slide — solo el ambiente/luz queda fijo. Esto aplica
+  igual dentro de `mezcla` para las slides clasificadas `foto`.
+- Quemar titulares en slides con protagonista requiere `opencv-python`
+  instalado (`pip install opencv-python`) — el chequeo de rostro es lo que
+  evita tapar la cara al elegir la zona del texto. Sin la librería, la
+  llamada falla con un error explícito en vez de arriesgarse a tapar una
+  cara silenciosamente.
 
 ## Recursos
 
@@ -179,9 +225,10 @@ anuncios pagados.
 - `../../scripts/references/image_prompt_style.md` — estilo fotográfico
   (default) y la paleta `BRAND_COLORS` (los usa `generate_post_image.py`, no
   esta skill directamente).
-- `../../scripts/references/canva_title_style.md` — tipografía y color del
-  título/texto de slide para el paso manual en Canva, y la regla de que no
-  se agrega firma.
+- `../../scripts/references/canva_title_style.md` — fuente de verdad de la
+  tipografía/color del titular (Anton amarillo/naranja + Playfair Display
+  italic dorado pálido) que `render_headline` en `generate_post_image.py`
+  ahora quema automáticamente; y la regla de que no se agrega firma.
 - `../../scripts/references/illustration_style.md` — los 4 estilos
   ilustrados con protagonista (`minimal`, `book`, `cartoon`, `storytelling`)
   y su límite de consistencia entre slides conocido (ver ese archivo), más
@@ -191,15 +238,29 @@ anuncios pagados.
   estilo `mezcla` (60/30/10): alcance, heurística de clasificación,
   apportionment con empates, y por qué ilustración/diagrama van sin
   protagonista. Compartida con `seleccion-clips-pexels`.
-- `../../scripts/generate_post_image.py` — genera cada fondo; `--protagonist`
-  para consistencia de persona, `--flat-color` para las slides sin foto,
-  `--visual-style` para elegir entre fotográfico, uno de los 4 ilustrados, o
-  `mezcla-ilustracion`.
+- `../../scripts/generate_post_image.py` — genera cada fondo y quema el
+  titular; `--protagonist` para consistencia de persona, `--setting` para
+  fijar el mismo ambiente/luz entre slides de foto de un carrusel,
+  `--flat-color` para las slides sin foto, `--visual-style` para elegir
+  entre fotográfico, uno de los 4 ilustrados, o `mezcla-ilustracion`,
+  `--headline-main`/`--headline-accent` para el titular quemado (zona segura
+  vía `CAMERA_ANGLE_SAFE_ZONES` + veto de OpenCV para ángulos ambiguos o
+  estilos ilustrados con protagonista).
 - `../../scripts/generate_diagram_image.py` — genera las slides de diagrama
   del estilo `mezcla`: lista numerada vertical con Pillow puro (sin Gemini,
-  texto siempre legible), reutiliza `BRAND_COLORS`/`--flat-color`.
+  texto siempre legible), reutiliza `BRAND_COLORS`/`--flat-color`, y
+  `--headline-main`/`--headline-accent` en el margen superior reservado (sin
+  chequeo de OpenCV, no hay protagonista).
+- `requirements.txt` (raíz) — incluye `opencv-python`, requerido solo para
+  quemar titulares sobre slides con protagonista (foto o los 4 estilos
+  ilustrados); flat-color, mezcla-ilustracion y diagrama nunca lo importan.
 - `testing/copy_gen_state.json` — estado de rotación de estructura y de
   color plano (claves `"carousel_structure"` y `"flat_color"`; se autogenera).
+- `testing/image_gen_state.json` — estado de rotación de composición/ángulo/
+  setting fotográfico (usado por `generate_post_image.py`, no por esta
+  skill directamente).
+- `testing/fonts/` — caché local de las fuentes descargadas (Anton, Playfair
+  Display Italic, Poppins) para quemar texto sin Gemini; se autogenera.
 
 ## Related skills
 

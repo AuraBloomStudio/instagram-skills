@@ -146,6 +146,28 @@ design. Every other slide, including "Para asentar," uses a generated photo
 background. This mix repeats on every carousel; it is not optional or
 randomized per slide.
 
+**First content slide carries the strongest pain (mandatory).** Slide 2 (the
+first slide after the hook) is the first real swipe -- if it doesn't land
+hard, the carousel loses the scroll right there. It must name the carousel's
+central pain/feeling at its most concrete and intense, never open with a
+neutral, generic question or a soft piece of context ("¿te ha pasado esto
+alguna vez?" is a bad slide 2 -- too vague to be the strongest beat). Later
+slides can open questions, add nuance, or build tension; slide 2 does not get
+to be the warm-up. What this means per structure:
+- **Narrativo** (1): the causa/origen slide must expose the hidden cause in
+  its rawest, most recognizable form, not a soft lead-in to it.
+- **Lista de comportamientos** (2): order the behaviors so the FIRST one
+  listed is the most recognizable/painful, not the mildest or most generic --
+  the rest can descend or vary from there, but never open on the weakest one.
+- **Antes/Después** (3): the first "Antes" slide must be the sharpest,
+  most concrete image of the old pattern, not a vague mood-setter.
+- **Preguntas de autodiagnóstico** (4): order the questions so the FIRST one
+  is the most piercing/revealing, not the easiest or most generic self-check
+  -- later questions can be softer or more specific.
+- **Mini-historia con giro** (5): the tension-building slide must open on a
+  concrete, high-stakes detail of the situation, not a scene-setting
+  generality.
+
 1. **Narrativo: problema → causa/origen → cómo se manifiesta → consecuencia →
    Para asentar → CTA.** 6 slides, siempre. Slide 1 plantea el problema
    (hook, sin foto). Slide 2 explica la causa/origen oculto (foto). Slide 3

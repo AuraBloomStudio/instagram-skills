@@ -39,6 +39,30 @@ the 60/30/10 mixed visual style (see references/mixed_visual_style.md): flat
 conceptual/iconographic illustration with NO people, so it never needs
 --protagonist.
 
+--setting <index-or-name> pins one specific SETTINGS entry (image_prompt_style.md)
+instead of letting the script rotate one automatically -- used to keep the
+same room/light source across every photo slide of one carousel (composition
+archetype and camera angle keep rotating freely per slide either way). Only
+applies to --visual-style photo; ignored otherwise.
+
+--headline-main "<phrase>" (optional --headline-accent "<shorter phrase>" too)
+bakes a short title directly onto the generated image with Pillow, instead of
+leaving it for a later manual Canva step -- same two-tier typography as
+canva_title_style.md (bold poster headline + optional pale-gold script accent
+line). For --visual-style photo and the 4 character-illustration styles, the
+headline is placed in whichever third of the frame (top or bottom) doesn't
+show a face: a fixed camera-angle -> safe-zone table skips the check
+entirely when the requested angle already guarantees no face in a zone
+(CAMERA_ANGLE_SAFE_ZONES) AND the composition depicts only one person, and an
+OpenCV Haar-cascade veto (needs opencv-python) verifies every other case --
+ambiguous angles, illustrated styles with no angle system, and any
+multi-person composition (MULTI_PERSON_ARCHETYPE_INDICES), since a
+deterministic angle only ever describes where the PROTAGONIST's face can be,
+not a companion's.
+Flat-color and mezcla-ilustracion slides have no protagonist at all, so the
+headline is centered with no face check. Omitting --headline-main leaves the
+image exactly as before this option existed -- no text, no opencv import.
+
 The visual style (lighting, composition options, how metaphors get reinterpreted)
 for photography lives entirely in scripts/references/image_prompt_style.md,
 and for illustration in scripts/references/illustration_style.md -- edit
@@ -68,7 +92,7 @@ from typing import Optional
 
 import requests
 from dotenv import load_dotenv, set_key
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 try:
     import docx  # python-docx
@@ -132,6 +156,196 @@ ILLUSTRATION_ANALYSIS_BLOCKS = {
 DEFAULT_VISUAL_STYLE = "photo"
 STATE_PATH = REPO_ROOT / "testing" / "image_gen_state.json"
 ROTATION_HISTORY = 2  # avoid repeating any of the last N picks per category
+
+# --- Baked-in headline text (--headline-main / --headline-accent) ----------
+# Shared font cache -- generate_diagram_image.py imports FONT_CACHE_DIR and
+# _download_font from here instead of keeping its own copy, so there is one
+# cache directory and one download helper for every script that bakes text.
+FONT_CACHE_DIR = REPO_ROOT / "testing" / "fonts"
+
+# Same two-tier typography as canva_title_style.md (bold poster headline +
+# pale-gold script accent line), same exact accent color/font-URL pattern
+# already proven in a real render by render_reel_json2video.py's
+# HOOK_ACCENT_FONT_URL -- kept in sync on purpose so carousels and reels read
+# as one brand system. Anton stands in for "Anton or Oswald Bold" per that
+# file's spec -- Oswald in google/fonts ships only as a single variable file
+# (Oswald[wght].ttf, no static Bold instance, confirmed 404 on the expected
+# static path), while Anton ships as one static file that's inherently the
+# condensed/poster weight the spec wants, no variable-axis handling needed.
+HEADLINE_MAIN_FONT_URL = (
+    "https://raw.githubusercontent.com/google/fonts/main/ofl/anton/Anton-Regular.ttf"
+)
+HEADLINE_ACCENT_FONT_URL = (
+    "https://raw.githubusercontent.com/google/fonts/main/ofl/playfairdisplay/"
+    "PlayfairDisplay-Italic%5Bwght%5D.ttf"
+)
+HEADLINE_MAIN_COLOR = (242, 169, 0)  # #F2A900
+HEADLINE_ACCENT_COLOR = (250, 232, 168)  # #FAE8A8
+# Solid outline behind the headline, same rationale as HOOK_MAIN_STROKE_* in
+# render_reel_json2video.py: keeps contrast when the zone lands on a bright
+# patch of the photo (a window, a light wall) -- applied to both lines here
+# since static photos vary more than reel B-roll, unlike the reel hook which
+# only stroked the main phrase.
+HEADLINE_STROKE_COLOR = (28, 18, 8)  # #1C1208
+
+# Index into CAMERA_ANGLES (image_prompt_style.md) -> deterministic
+# text-safe zone. The script already knows exactly which angle it asked for
+# per call, so most of the time no pixel analysis is needed at all: "Shot
+# from directly behind" and "framed from shoulders/collarbone down" and the
+# hands-only close-up all guarantee (by construction) where the face can or
+# can't be. "auto" marks the 2 angles that don't guarantee anything on their
+# own (profile/three-quarter turned away, softly backlit) -- those fall back
+# to the OpenCV veto check on both thirds before trusting either one.
+CAMERA_ANGLE_SAFE_ZONES = ["bottom", "auto", "auto", "top", "top"]
+
+# Index into COMPOSITION_ARCHETYPES (image_prompt_style.md) for the 2 that
+# depict more than one person. CAMERA_ANGLE_SAFE_ZONES' deterministic zones
+# only describe where the PROTAGONIST's head/face can be -- confirmed in a
+# real test that "framed from shoulders down" (a deterministic "top" zone)
+# left a second figure's face partially inside the top third anyway, since
+# that instruction only binds "the figure" (singular). For these 2
+# archetypes, never trust the deterministic zone -- always run the OpenCV
+# veto regardless of which camera angle was picked.
+MULTI_PERSON_ARCHETYPE_INDICES = {2, 3}
+
+
+def _download_font(url: str, dest: Path) -> Path:
+    if dest.exists():
+        return dest
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    resp = requests.get(url, timeout=30)
+    if resp.status_code >= 400:
+        raise GenerationError(f"No se pudo descargar la fuente {url}: HTTP {resp.status_code}")
+    dest.write_bytes(resp.content)
+    return dest
+
+
+def _wrap_text(draw: "ImageDraw.ImageDraw", text: str, font: "ImageFont.FreeTypeFont", max_width: int) -> list:
+    words = text.split()
+    if not words:
+        return [""]
+    lines = []
+    current = words[0]
+    for word in words[1:]:
+        candidate = f"{current} {word}"
+        if draw.textlength(candidate, font=font) <= max_width:
+            current = candidate
+        else:
+            lines.append(current)
+            current = word
+    lines.append(current)
+    return lines
+
+
+def _zone_pixel_bounds(zone: str, width: int, height: int) -> tuple:
+    band_height = round(height * 0.30)
+    if zone == "top":
+        return (0, 0, width, band_height)
+    return (0, height - band_height, width, height)
+
+
+def _zone_has_face(image: "Image.Image", zone: str) -> bool:
+    """OpenCV Haar-cascade check on one third of the frame -- offline, free,
+    no extra Gemini call. Only reached for the 2 ambiguous camera angles (or
+    the 4 character-illustration styles, which have no angle system at all),
+    never for flat-color/mezcla-ilustracion (no protagonist, no face
+    possible) or the 3 deterministic photo angles."""
+    try:
+        import cv2
+        import numpy as np
+    except ImportError as e:
+        raise GenerationError(
+            "Quemar texto con proteccion de rostro requiere opencv-python. "
+            "Instala con: pip install opencv-python"
+        ) from e
+
+    box = _zone_pixel_bounds(zone, image.width, image.height)
+    crop = image.crop(box).convert("L")
+    array = np.array(crop)
+    cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    faces = cascade.detectMultiScale(array, scaleFactor=1.1, minNeighbors=5)
+    return len(faces) > 0
+
+
+def resolve_headline_zone(preferred_zone: str, image: "Image.Image") -> str:
+    """preferred_zone is "top"/"bottom" (deterministic, no check needed) or
+    "auto" (ambiguous angle -- verify with OpenCV before trusting a zone).
+    Always returns a usable zone: if both thirds show a face, defaults to
+    "top" anyway with a warning rather than skipping the headline entirely --
+    every generated image gets baked text, never a silent gap."""
+    if preferred_zone in ("top", "bottom"):
+        return preferred_zone
+    if not _zone_has_face(image, "top"):
+        return "top"
+    if not _zone_has_face(image, "bottom"):
+        return "bottom"
+    print(
+        "  Aviso: se detecto un rostro en ambos tercios candidatos para el "
+        "titular; se usa el tercio superior de todos modos (revisar el "
+        "resultado a mano)."
+    )
+    return "top"
+
+
+def render_headline(
+    image: "Image.Image", zone: str, headline_main: str, headline_accent: Optional[str]
+) -> "Image.Image":
+    """Bake headline_main (+ optional headline_accent) onto image, centered
+    within the given zone ("top"/"bottom" = that third of the frame,
+    "center" = the whole canvas, used for flat-color quote cards where the
+    text IS the entire design)."""
+    image = image.copy()
+    draw = ImageDraw.Draw(image)
+    width, height = image.size
+
+    main_path = _download_font(HEADLINE_MAIN_FONT_URL, FONT_CACHE_DIR / "Anton-Regular.ttf")
+    main_size = max(round(width * 0.075), 40)
+    main_font = ImageFont.truetype(str(main_path), main_size)
+    max_text_width = round(width * 0.86)
+    main_lines = _wrap_text(draw, headline_main.upper(), main_font, max_text_width)
+    main_line_height = round(main_size * 1.15)
+
+    accent_lines: list = []
+    accent_font = None
+    accent_line_height = 0
+    if headline_accent:
+        accent_path = _download_font(
+            HEADLINE_ACCENT_FONT_URL, FONT_CACHE_DIR / "PlayfairDisplay-Italic.ttf"
+        )
+        accent_size = max(round(width * 0.06), 32)
+        accent_font = ImageFont.truetype(str(accent_path), accent_size)
+        accent_lines = _wrap_text(draw, headline_accent, accent_font, max_text_width)
+        accent_line_height = round(accent_size * 1.2)
+
+    block_height = len(main_lines) * main_line_height + len(accent_lines) * accent_line_height
+
+    if zone == "top":
+        band_top, band_bottom = 0, round(height * 0.30)
+    elif zone == "bottom":
+        band_top, band_bottom = height - round(height * 0.30), height
+    else:  # "center" -- flat-color quote cards, text is the whole design
+        band_top, band_bottom = 0, height
+    y = (band_top + band_bottom) / 2 - block_height / 2
+
+    for line in main_lines:
+        bbox = draw.textbbox((0, 0), line, font=main_font)
+        x = (width - (bbox[2] - bbox[0])) / 2
+        draw.text(
+            (x, y), line, font=main_font, fill=HEADLINE_MAIN_COLOR,
+            stroke_width=max(round(main_size * 0.035), 2), stroke_fill=HEADLINE_STROKE_COLOR,
+        )
+        y += main_line_height
+
+    for line in accent_lines:
+        bbox = draw.textbbox((0, 0), line, font=accent_font)
+        x = (width - (bbox[2] - bbox[0])) / 2
+        draw.text(
+            (x, y), line, font=accent_font, fill=HEADLINE_ACCENT_COLOR,
+            stroke_width=max(round(accent_size * 0.02), 1), stroke_fill=HEADLINE_STROKE_COLOR,
+        )
+        y += accent_line_height
+
+    return image
 
 
 def _load_state() -> dict:
@@ -363,29 +577,40 @@ def _parse_brand_color(entry: str) -> dict:
     )
 
 
-def select_brand_color(spec: str, brand_colors: list) -> dict:
-    """Resolve --flat-color's value (a 1-based index or a case-insensitive
-    substring of the entry name) to a parsed BRAND_COLORS entry."""
+def _resolve_indexed_entry(spec: str, items: list, arg_label: str) -> str:
+    """Resolve a CLI value (a 1-based index or a case-insensitive substring)
+    to one entry of a numbered reference list -- shared by --flat-color
+    (BRAND_COLORS) and --setting (SETTINGS)."""
     spec = spec.strip()
     if spec.isdigit():
         idx = int(spec) - 1
-        if not (0 <= idx < len(brand_colors)):
+        if not (0 <= idx < len(items)):
             raise GenerationError(
-                f"--flat-color {spec} fuera de rango (BRAND_COLORS tiene "
-                f"{len(brand_colors)} entradas)."
+                f"{arg_label} {spec} fuera de rango ({len(items)} entradas disponibles)."
             )
-        return _parse_brand_color(brand_colors[idx])
-    matches = [c for c in brand_colors if spec.lower() in c.lower()]
+        return items[idx]
+    matches = [c for c in items if spec.lower() in c.lower()]
     if not matches:
-        raise GenerationError(
-            f"--flat-color {spec!r} no coincide con ninguna entrada de BRAND_COLORS."
-        )
+        raise GenerationError(f"{arg_label} {spec!r} no coincide con ninguna entrada.")
     if len(matches) > 1:
         raise GenerationError(
-            f"--flat-color {spec!r} coincide con varias entradas de BRAND_COLORS: "
-            f"{matches}. Sé más específico o usa el número de índice."
+            f"{arg_label} {spec!r} coincide con varias entradas: {matches}. "
+            "Sé más específico o usa el número de índice."
         )
-    return _parse_brand_color(matches[0])
+    return matches[0]
+
+
+def select_brand_color(spec: str, brand_colors: list) -> dict:
+    """Resolve --flat-color's value (a 1-based index or a case-insensitive
+    substring of the entry name) to a parsed BRAND_COLORS entry."""
+    return _parse_brand_color(_resolve_indexed_entry(spec, brand_colors, "--flat-color"))
+
+
+def select_setting(spec: str, settings: list) -> str:
+    """Resolve --setting's value to one exact SETTINGS entry -- pins the same
+    room/light source across every photo slide of a carousel instead of
+    letting the script rotate one automatically."""
+    return _resolve_indexed_entry(spec, settings, "--setting")
 
 
 def render_flat_color_image(color: dict, size: tuple) -> "Image.Image":
@@ -560,7 +785,32 @@ def main() -> int:
         "comportamiento). minimal/book/cartoon/storytelling usan "
         "illustration_style.md en vez de image_prompt_style.md.",
     )
+    parser.add_argument(
+        "--setting",
+        default=None,
+        metavar="INDICE_O_NOMBRE",
+        help="Solo con --visual-style photo: fija un SETTINGS de "
+        "image_prompt_style.md en vez de rotarlo, para mantener el mismo "
+        "ambiente/luz en todas las slides de foto de un carrusel. "
+        "Composición y ángulo de cámara siguen rotando libres.",
+    )
+    parser.add_argument(
+        "--headline-main",
+        default=None,
+        help="Titular corto a quemar sobre la imagen con Pillow (Anton, "
+        "mismo estilo que canva_title_style.md). Sin esta opción, "
+        "comportamiento idéntico al de antes: ninguna imagen lleva texto.",
+    )
+    parser.add_argument(
+        "--headline-accent",
+        default=None,
+        help="Línea de cierre opcional, más corta, debajo de --headline-main "
+        "(Playfair Display italic dorado pálido). Requiere --headline-main.",
+    )
     args = parser.parse_args()
+    if args.headline_accent and not args.headline_main:
+        print("--headline-accent requiere --headline-main.", file=sys.stderr)
+        return 1
 
     copy_path = Path(args.copy_file)
     if not copy_path.exists():
@@ -581,6 +831,8 @@ def main() -> int:
             color = select_brand_color(args.flat_color, style["brand_colors"])
             print(f"Generando fondo de color (sin Gemini, sin API key): {color['label']}")
             image = render_flat_color_image(color, output_size)
+            if args.headline_main:
+                image = render_headline(image, "center", args.headline_main, args.headline_accent)
             image.save(out_path, "PNG")
             print(f"Imagen guardada en: {out_path} ({output_size[0]}x{output_size[1]})")
             return 0
@@ -590,11 +842,21 @@ def main() -> int:
         print(f"Leyendo copy: {copy_path.name}")
         copy_text = read_copy_text(copy_path)
 
+        headline_zone = "top"  # default for illustration/mezcla-ilustracion (no protagonist)
         if args.visual_style == "photo":
             state = _load_state()
             archetype = _pick_avoiding_recent(style["archetypes"], "composition", state)
+            if args.setting:
+                setting = select_setting(args.setting, style["settings"])
+                state["setting"] = ([setting] + state.get("setting", []))[:ROTATION_HISTORY]
+            else:
+                setting = _pick_avoiding_recent(style["settings"], "setting", state)
             camera_angle = _pick_avoiding_recent(style["camera_angles"], "camera_angle", state)
-            setting = _pick_avoiding_recent(style["settings"], "setting", state)
+            archetype_index = style["archetypes"].index(archetype)
+            if archetype_index in MULTI_PERSON_ARCHETYPE_INDICES:
+                headline_zone = "auto"
+            else:
+                headline_zone = CAMERA_ANGLE_SAFE_ZONES[style["camera_angles"].index(camera_angle)]
 
             print("Analizando emoción central y tema con Gemini...")
             analysis = analyze_copy(
@@ -609,6 +871,8 @@ def main() -> int:
             image_prompt = build_image_prompt(analysis, style, aspect_ratio)
         else:
             illustration_style = load_illustration_style(args.visual_style)
+            if args.visual_style != "mezcla-ilustracion":
+                headline_zone = "auto"  # no archetype/angle system for the 4 character styles
             print(f"Analizando emoción central y tema con Gemini (estilo: {args.visual_style})...")
             analysis = analyze_copy_illustration(
                 copy_text, api_key, illustration_style, args.protagonist
@@ -627,6 +891,12 @@ def main() -> int:
         image = Image.open(BytesIO(image_bytes)).convert("RGB")
         if image.size != output_size:
             image = image.resize(output_size, Image.LANCZOS)
+
+        if args.headline_main:
+            zone = resolve_headline_zone(headline_zone, image)
+            print(f"  Zona del titular: {zone}")
+            image = render_headline(image, zone, args.headline_main, args.headline_accent)
+
         image.save(out_path, "PNG")
         print(f"Imagen guardada en: {out_path} ({output_size[0]}x{output_size[1]})")
 
