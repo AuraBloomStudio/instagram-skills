@@ -16,6 +16,9 @@ testing/
 # downloaded Pexels B-roll clips (large binaries, not for the public repo)
 scripts/output_clips/
 
+# downloaded Pexels still photos (large binaries, not for the public repo)
+scripts/output_photos/
+
 # generated reel narration audio (large binaries, not for the public repo)
 scripts/output_audio/
 

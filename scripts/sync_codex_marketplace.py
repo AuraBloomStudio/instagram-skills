@@ -44,6 +44,7 @@ def copy_path(src: Path, dest: Path) -> None:
                 "output_clips",
                 "output_audio",
                 "output_reels",
+                "output_photos",
             )
         shutil.copytree(src, dest, ignore=ignore)
     else:

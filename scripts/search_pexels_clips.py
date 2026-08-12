@@ -311,10 +311,20 @@ STUDIO_NAME_BLOCKLIST = (
     "films", "media", "presets", "etsy.com",
 )
 
+# A real individual photographer's Pexels display name is never a bare URL --
+# confirmed in a real carousel search that "https://kaboompics.com/" won
+# protagonist selection (no blocklisted word above matches "kaboompics")
+# despite being exactly the same multi-model aggregator problem as a studio
+# account: the 5 downloaded "protagonist" photos turned out to be at least 4
+# different people, including a child, none matching each other.
+_URL_LIKE_AUTHOR_RE = re.compile(r"https?://|www\.|\.(com|net|org|co|io)\b", re.IGNORECASE)
+
 
 def _looks_like_studio_account(author_name: str) -> bool:
     lowered = author_name.lower()
-    return any(word in lowered for word in STUDIO_NAME_BLOCKLIST)
+    if any(word in lowered for word in STUDIO_NAME_BLOCKLIST):
+        return True
+    return bool(_URL_LIKE_AUTHOR_RE.search(author_name))
 
 
 def pick_protagonist(

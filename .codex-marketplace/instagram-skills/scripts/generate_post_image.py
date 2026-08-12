@@ -275,7 +275,18 @@ def _zone_has_face(
     angles, the 4 character-illustration styles (no angle system at all),
     and always for --source-image (Pexels or any externally supplied photo,
     no composition info at all) -- never for flat-color/mezcla-ilustracion
-    (no protagonist, no face possible) or the 3 deterministic photo angles."""
+    (no protagonist, no face possible) or the 3 deterministic photo angles.
+
+    This is a best-effort pre-filter, not a guarantee: a real carousel test
+    found this exact cascade (even after tuning below) can flip between
+    detecting and missing the same real, visibly uncovered face depending on
+    a 1px difference in the crop height it's given (itself a function of how
+    much text the caller is baking) -- an inherent instability of Haar
+    cascades on marginal (tilted, partially hand-occluded) faces, not
+    something scaleFactor/minNeighbors alone can fully close. The mandatory
+    visual review step in carrusel-constelaciones/SKILL.md (checking every
+    generated image by eye before shipping) is the real backstop; this
+    function only reduces how often that manual check finds something."""
     try:
         import cv2
         import numpy as np
@@ -289,7 +300,15 @@ def _zone_has_face(
     crop = image.crop(box).convert("L")
     array = np.array(crop)
     cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-    faces = cascade.detectMultiScale(array, scaleFactor=1.1, minNeighbors=5)
+    # scaleFactor=1.1/minNeighbors=5 (OpenCV's own defaults) missed a real,
+    # visibly uncovered face in a real carousel test -- tilted down, one hand
+    # partially raised near it. minNeighbors=5 requires 5 overlapping
+    # detection windows to agree before counting a hit; the real face only
+    # ever produced 3. A missed face means baked text silently covers it,
+    # which the mandatory rule forbids outright; a false positive here only
+    # costs a zone swap or a manual-review warning. Biasing hard toward
+    # over-detection is the correct tradeoff for a safety veto.
+    faces = cascade.detectMultiScale(array, scaleFactor=1.05, minNeighbors=3)
     return len(faces) > 0
 
 
@@ -357,26 +376,20 @@ def apply_gradient_scrim(image: "Image.Image") -> "Image.Image":
     return Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
 
 
-def render_headline(
-    image: "Image.Image",
-    zone: str,
+def _build_text_blocks(
+    draw: "ImageDraw.ImageDraw",
+    width: int,
     headline_main: str,
     headline_accent: Optional[str] = None,
     headline_extra: Optional[str] = None,
     body_text: Optional[str] = None,
-) -> "Image.Image":
-    """Bake headline_main (+ optional headline_accent, and EITHER
-    headline_extra OR body_text, never both) onto image, centered within the
-    given zone ("top"/"bottom" = that band of the frame -- BODY_BAND_FRACTION
-    wide if body_text is given, DEFAULT_BAND_FRACTION otherwise -- "center" =
-    the whole canvas, used for flat-color quote cards where the text IS the
-    entire design). body_text also gets a full-frame gradient scrim behind
-    every block (see apply_gradient_scrim)."""
-    image = image.copy()
-    if body_text:
-        image = apply_gradient_scrim(image)
-    draw = ImageDraw.Draw(image)
-    width, height = image.size
+) -> tuple:
+    """Wrap headline_main (+ optional accent/extra/body_text) into the same
+    line/font/color blocks render_headline draws, and return (blocks,
+    total_block_height). Split out from render_headline so the real pixel
+    height this specific text needs can be measured BEFORE picking a zone --
+    a long body_text paragraph can need more room than the fixed
+    BODY_BAND_FRACTION reserves, see compute_band_fraction."""
     max_text_width = round(width * 0.86)
 
     main_path = _download_font(HEADLINE_MAIN_FONT_URL, FONT_CACHE_DIR / "Poppins-Bold.ttf")
@@ -431,8 +444,70 @@ def render_headline(
         )
 
     block_height = sum(len(b["lines"]) * b["line_height"] for b in blocks)
+    return blocks, block_height
 
-    band_fraction = BODY_BAND_FRACTION if body_text else DEFAULT_BAND_FRACTION
+
+def compute_band_fraction(
+    width: int,
+    height: int,
+    headline_main: str,
+    headline_accent: Optional[str] = None,
+    headline_extra: Optional[str] = None,
+    body_text: Optional[str] = None,
+) -> float:
+    """The band_fraction resolve_headline_zone's OpenCV check and
+    render_headline's placement must BOTH use for this exact text, instead of
+    the fixed DEFAULT_BAND_FRACTION/BODY_BAND_FRACTION constants. A carousel
+    content slide's body_text paragraph can run long enough that its block
+    (title + subtitle + paragraph) genuinely exceeds the fixed 55% band --
+    when that happened with a fixed fraction, render_headline centered the
+    overflow past the pixel range the veto had actually checked, silently
+    baking text over a real face the check never looked at (found via visual
+    review, never caught by the veto itself). Adding an 8% safety margin over
+    the measured block height and re-checking the constants as a floor keeps
+    short text at the original comfortable minimum; 0.85 caps it so a
+    pathologically long paragraph can't demand the whole frame."""
+    dummy = Image.new("RGB", (width, height))
+    draw = ImageDraw.Draw(dummy)
+    _, block_height = _build_text_blocks(
+        draw, width, headline_main, headline_accent, headline_extra, body_text
+    )
+    minimum = BODY_BAND_FRACTION if body_text else DEFAULT_BAND_FRACTION
+    return min(max(minimum, (block_height / height) * 1.08), 0.85)
+
+
+def render_headline(
+    image: "Image.Image",
+    zone: str,
+    headline_main: str,
+    headline_accent: Optional[str] = None,
+    headline_extra: Optional[str] = None,
+    body_text: Optional[str] = None,
+    band_fraction: Optional[float] = None,
+) -> "Image.Image":
+    """Bake headline_main (+ optional headline_accent, and EITHER
+    headline_extra OR body_text, never both) onto image, centered within the
+    given zone ("top"/"bottom" = that band of the frame, sized by
+    band_fraction -- "center" = the whole canvas, used for flat-color quote
+    cards where the text IS the entire design). body_text also gets a
+    full-frame gradient scrim behind every block (see apply_gradient_scrim).
+    band_fraction should be whatever compute_band_fraction returned for this
+    same text -- callers that skip it (band_fraction=None) get it computed
+    here as a fallback, but then resolve_headline_zone's earlier face check
+    may have used a different, unmatched fraction."""
+    image = image.copy()
+    if body_text:
+        image = apply_gradient_scrim(image)
+    draw = ImageDraw.Draw(image)
+    width, height = image.size
+    blocks, block_height = _build_text_blocks(
+        draw, width, headline_main, headline_accent, headline_extra, body_text
+    )
+
+    if band_fraction is None:
+        band_fraction = compute_band_fraction(
+            width, height, headline_main, headline_accent, headline_extra, body_text
+        )
     if zone == "top":
         band_top, band_bottom = 0, round(height * band_fraction)
     elif zone == "bottom":
@@ -1009,12 +1084,15 @@ def main() -> int:
             image = Image.open(src_path).convert("RGB")
             image = cover_resize(image, output_size)
             if args.headline_main:
-                band_fraction = BODY_BAND_FRACTION if args.body_text else DEFAULT_BAND_FRACTION
+                band_fraction = compute_band_fraction(
+                    output_size[0], output_size[1], args.headline_main,
+                    args.headline_accent, args.headline_extra, args.body_text,
+                )
                 zone = resolve_headline_zone("auto", image, band_fraction)
                 print(f"  Zona del titular: {zone}")
                 image = render_headline(
                     image, zone, args.headline_main, args.headline_accent,
-                    args.headline_extra, args.body_text,
+                    args.headline_extra, args.body_text, band_fraction,
                 )
             image.save(out_path, "PNG")
             print(f"Imagen guardada en: {out_path} ({output_size[0]}x{output_size[1]})")
@@ -1076,12 +1154,15 @@ def main() -> int:
             image = image.resize(output_size, Image.LANCZOS)
 
         if args.headline_main:
-            band_fraction = BODY_BAND_FRACTION if args.body_text else DEFAULT_BAND_FRACTION
+            band_fraction = compute_band_fraction(
+                output_size[0], output_size[1], args.headline_main,
+                args.headline_accent, args.headline_extra, args.body_text,
+            )
             zone = resolve_headline_zone(headline_zone, image, band_fraction)
             print(f"  Zona del titular: {zone}")
             image = render_headline(
                 image, zone, args.headline_main, args.headline_accent,
-                args.headline_extra, args.body_text,
+                args.headline_extra, args.body_text, band_fraction,
             )
 
         image.save(out_path, "PNG")

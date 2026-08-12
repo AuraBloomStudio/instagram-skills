@@ -223,38 +223,41 @@ to be the warm-up. What this means per structure:
 sentences that build genuine identification with one specific microdolor --
 a recognizable situation, not an abstract label for a feeling. "Sientes
 culpa a veces" is too thin; "Cada vez que por fin ves una cifra que te hace
-respirar, aparece una urgencia y te quedás otra vez en ceros" names the
-actual pattern. This full paragraph is what gets baked as `--body-text` (see
+respirar, aparece una urgencia y te quedas otra vez en ceros" names the
+actual pattern (español neutro, sin voseo -- ver la regla de idioma en
+"Voice fingerprint"). This full paragraph is what gets baked as `--body-text` (see
 "Design mix" above) -- it is real content the reader reads on the image
 itself, not a caption-only detail. A single generic sentence that could sit
 on any post about any topic is a defect, not a stylistic minimum.
 
 1. **Narrativo: problema → causa/origen → cómo se manifiesta → consecuencia →
    Para asentar → CTA.** 6 slides, siempre. Slide 1 plantea el problema
-   (hook, sin foto). Slide 2 explica la causa/origen oculto (foto). Slide 3
-   muestra cómo se manifiesta en el día a día (foto). Slide 4 nombra la
-   consecuencia de no verlo (foto). Slide 5 es "Para asentar" (foto).
-   Slide 6 es el CTA (sin foto).
+   (hook, foto). Slide 2 explica la causa/origen oculto (foto + body-text).
+   Slide 3 muestra cómo se manifiesta en el día a día (foto + body-text).
+   Slide 4 nombra la consecuencia de no verlo (foto + body-text). Slide 5 es
+   "Para asentar" (foto + body-text). Slide 6 es el CTA (sin foto,
+   flat-color).
 2. **Lista de comportamientos en paralelo.** 6-8 slides depending on how many
-   behaviors fit the topic: hook (sin foto) + 3-5 behavior slides (foto) +
-   "Para asentar" (foto) + CTA (sin foto). Mínimo 3 comportamientos para
-   llegar a 6 slides.
+   behaviors fit the topic: hook (foto) + 3-5 behavior slides (foto +
+   body-text) + "Para asentar" (foto + body-text) + CTA (sin foto,
+   flat-color). Mínimo 3 comportamientos para llegar a 6 slides.
 3. **Antes / Después.** 6 slides, siempre (ya no hay variante corta): el
    contraste se desarrolla en dos beats por lado en vez de uno. Slide 1 =
-   "Antes" -- cómo se ve/siente el patrón viejo (hook, sin foto). Slide 2 =
-   "Antes" -- una consecuencia concreta de ese patrón (foto). Slide 3 =
-   "Después" -- qué cambia al soltarlo (foto). Slide 4 = "Después" -- qué se
-   gana (foto). Slide 5 = "Para asentar" (foto). Slide 6 = CTA (sin foto).
+   "Antes" -- cómo se ve/siente el patrón viejo (hook, foto). Slide 2 =
+   "Antes" -- una consecuencia concreta de ese patrón (foto + body-text).
+   Slide 3 = "Después" -- qué cambia al soltarlo (foto + body-text). Slide 4
+   = "Después" -- qué se gana (foto + body-text). Slide 5 = "Para asentar"
+   (foto + body-text). Slide 6 = CTA (sin foto, flat-color).
 4. **Preguntas de autodiagnóstico.** 6-8 slides depending on how many signs
-   fit: hook (sin foto) + 3-5 self-check question slides (foto) + "Para
-   asentar" (foto) + CTA (sin foto). Mínimo 3 preguntas para llegar a 6
-   slides.
+   fit: hook (foto) + 3-5 self-check question slides (foto + body-text) +
+   "Para asentar" (foto + body-text) + CTA (sin foto, flat-color). Mínimo 3
+   preguntas para llegar a 6 slides.
 5. **Mini-historia con giro: situación → tensión → punto de quiebre →
    revelación → Para asentar → CTA.** 6 slides, siempre. Slide 1 sets the
-   situation (hook, sin foto). Slide 2 the tension building up (foto).
-   Slide 3 the specific breaking point/momento crítico (foto). Slide 4 the
-   revelation/reframe (foto). Slide 5 is "Para asentar" (foto). Slide 6 is
-   CTA (sin foto).
+   situation (hook, foto). Slide 2 the tension building up (foto +
+   body-text). Slide 3 the specific breaking point/momento crítico (foto +
+   body-text). Slide 4 the revelation/reframe (foto + body-text). Slide 5 is
+   "Para asentar" (foto + body-text). Slide 6 is CTA (sin foto, flat-color).
 
 ## STORY_STRUCTURES
 

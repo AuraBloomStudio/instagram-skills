@@ -129,6 +129,15 @@ se deriva del tema/hook al principio del flujo, mismo criterio que
    carrusel) para elegir protagonista. **No hay `--protagonist` que redactar
    a mano** — el protagonista real lo elige `search_pexels_photo.py` en su
    Fase 0, a partir de estos términos.
+   - **`cutaway_terms` deben ser estrictamente de objeto/mano, nunca de
+     persona (regla dura).** Pexels no entiende "sin rostro" como una
+     restricción real: si el término menciona "woman"/"man" o cualquier
+     parte del cuerpo cercana a la cara (hombros, labios, cuello), el motor
+     de búsqueda igual devuelve retratos editoriales con rostro nítido,
+     etiquetados como si fueran de apoyo. Escribir siempre en torno a un
+     objeto o una mano en la escena, sin sujeto humano nombrado — ej. "close
+     up hands resting table warm light", "hands holding coffee mug kitchen
+     counter", nunca "woman shoulders relaxed" ni "woman biting lip".
 7. **Si el estilo visual es `mezcla`, clasificar cada slide de contenido**
    (ver nota de la sección "Cuándo se activa" sobre la pierna `foto` de
    `mezcla` desactualizada) en `foto` / `ilustración` / `diagrama`, heurística
