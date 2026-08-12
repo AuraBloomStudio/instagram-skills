@@ -1,6 +1,6 @@
 ---
 name: carrusel-constelaciones
-description: Draft a multi-slide organic Instagram/Facebook carousel for Constelaciones Familiares in one of 5 structures (narrativo problema-explicación-Para asentar-CTA, lista de comportamientos, antes/después, autodiagnóstico, mini-historia con giro), following the brand voice in scripts/references/constelaciones_brand_voice.md (español neutro colombiano, no voseo), with the first content slide always carrying the carousel's strongest pain beat, never a generic opener, and every content slide/"Para asentar"/CTA written as a real 2-4 sentence paragraph naming one concrete microdolor (or, for the CTA, the reinforced bridge), not a one-line headline. Sources every slide (hook + content + "Para asentar" + CTA -- the whole carousel) from real Pexels stock photography via scripts/search_pexels_photo.py -- the same protagonist-consistency cascade seleccion-clips-pexels already uses for reels, reused by import -- never Gemini, and never any other skill's photo pipeline (post-constelaciones, imagen-post-constelaciones, historias-constelaciones keep generating with Gemini, unaffected). Bakes text directly onto every slide with Pillow (Poppins Bold + Playfair Display italic, same typography as reels): hook gets título + subtítulo + a third short line; every other slide including the CTA gets título + subtítulo + its full paragraph in cyan #22D3EE over a dark gradient scrim, the CTA's paragraph being a bridge sentence that explicitly names the specific pain the carousel just developed before mentioning the book and pointing the reader to the caption for the link (never baking the link itself onto a slide, since Instagram never makes on-image text clickable). Placement always runs an OpenCV face check (needs opencv-python) since a real Pexels photo has no requested composition to trust blindly. Saves each carousel's finished images to its own Desktop/Imagenes Posts/<slug>/ subfolder instead of the shared root. Use for "hazme un carrusel de [tema]", "necesito un carrusel sobre [tema]", optionally with a visual style named ("...estilo minimalista/tipo libro/caricatura/storytelling/mezcla..."). Not for single-image posts (use post-constelaciones) or paid ads (future ads-constelaciones).
+description: Draft a multi-slide organic Instagram/Facebook carousel for Constelaciones Familiares in one of 5 structures (narrativo problema-explicación-Para asentar-CTA, lista de comportamientos, antes/después, autodiagnóstico, mini-historia con giro), following the brand voice in scripts/references/constelaciones_brand_voice.md (español neutro colombiano, no voseo), with the first content slide always carrying the carousel's strongest pain beat, never a generic opener, and every content slide/"Para asentar"/CTA written as a real 2-4 sentence paragraph naming one concrete microdolor (or, for the CTA, the reinforced bridge), not a one-line headline. Sources every slide (hook + content + "Para asentar" + CTA -- the whole carousel) from real Pexels stock photography via scripts/search_pexels_photo.py -- the same protagonist-consistency cascade seleccion-clips-pexels already uses for reels, reused by import -- never Gemini, and never any other skill's photo pipeline (post-constelaciones, imagen-post-constelaciones, historias-constelaciones keep generating with Gemini, unaffected). Bakes text directly onto every slide with Pillow (Poppins Bold + Playfair Display italic, same typography as reels): hook gets título + subtítulo + a third short line; every other slide including the CTA gets título + subtítulo + its full paragraph in cyan #22D3EE over a dark gradient scrim, the CTA's paragraph being a bridge sentence that explicitly names the specific pain the carousel just developed before mentioning the book and pointing the reader to the caption for the link (never baking the link itself onto a slide, since Instagram never makes on-image text clickable). Placement always runs an OpenCV face check (needs opencv-python) since a real Pexels photo has no requested composition to trust blindly. Saves each carousel's finished images to its own Desktop/Imagenes Posts/<slug>/ subfolder instead of the shared root, then builds one consolidated "PAQUETE - <hook>.docx" (every slide image in order + the caption + a new first-comment CTA + hashtags + a publish checklist, per PACKAGING_STANDARD) via scripts/build_paquete_docx.py. Use for "hazme un carrusel de [tema]", "necesito un carrusel sobre [tema]", optionally with a visual style named ("...estilo minimalista/tipo libro/caricatura/storytelling/mezcla..."). Not for single-image posts (use post-constelaciones) or paid ads (future ads-constelaciones).
 ---
 
 # Carrusel Constelaciones (multi-slide)
@@ -227,6 +227,25 @@ se deriva del tema/hook al principio del flujo, mismo criterio que
     final, y cualquier advertencia heredada de `resumen_fotos.txt`
     (`⚠ protagonista distinta`, `⚠ match aproximado`, slides sin foto
     encontrada). Recordar que no se agrega firma de marca a ninguna slide.
+16. **Armar el paquete consolidado** (ver `PACKAGING_STANDARD` en
+    `constelaciones_brand_voice.md` para el detalle completo). Determinar el
+    libro correcto para el primer comentario aplicando la tabla tema -> libro
+    de `FACEBOOK_POST_STRUCTURE` (Dolor, Dinero, Mamá, Papá, Regreso, mismo
+    fallback a *El dolor que no te pertenece*) al tema de este carrusel --
+    puede ser un libro distinto del que ya nombra el bridge del CTA de la
+    última slide. Redactar un texto de primer comentario corto (2-3 líneas)
+    con ese libro, en una redacción distinta a la del CTA que ya va en la
+    slide/caption. Luego correr:
+    ```
+    python scripts/build_paquete_docx.py "<hook>" --copy-docx "<ruta a la Caption.docx del paso 10>" --image "<ruta slide 1>" --image "<ruta slide 2>" ... --image "<ruta última slide>" --primer-comentario "<texto del primer comentario>"
+    ```
+    `--image` se repite una vez por slide, en el mismo orden de publicación
+    (hook primero, CTA al final) -- nunca la caption, que no tiene imagen
+    propia. Esto genera
+    `Desktop/Posts Constelaciones/PAQUETE - <hook>.docx` -- no reemplaza los
+    `.docx` de slide/caption del paso 10 ni las imágenes del paso 14, los
+    complementa. Mostrar la ruta final al usuario junto con el resto del
+    resultado.
 
 ## Reglas duras
 
@@ -269,6 +288,11 @@ se deriva del tema/hook al principio del flujo, mismo criterio que
   librería, la llamada falla con un error explícito en vez de arriesgarse a
   tapar una cara silenciosamente.
 - Nunca se agrega firma de marca (nombre de autor, @handle) a ninguna slide.
+- El paquete consolidado (paso 16) es siempre el último paso, nunca antes de
+  que existan todas las imágenes finales y la caption. El texto del primer
+  comentario es nuevo (nunca copiar el bridge del CTA tal cual) y su libro
+  se decide con la tabla tema -> libro, no siempre el mismo del bridge de la
+  última slide — ver `PACKAGING_STANDARD` en `constelaciones_brand_voice.md`.
 
 ## Recursos
 
@@ -299,6 +323,8 @@ se deriva del tema/hook al principio del flujo, mismo criterio que
   `diagrama` dentro de `mezcla`.
 - `../../scripts/generate_diagram_image.py` — solo si se usa `mezcla` y hay
   slide de diagrama.
+- `../../scripts/build_paquete_docx.py` — arma el paquete consolidado del
+  paso 16.
 - `requirements.txt` (raíz) — incluye `opencv-python` (veto de rostro al
   quemar texto) y `Pillow`.
 - `testing/copy_gen_state.json` — rotación de estructura y color plano.
@@ -307,6 +333,8 @@ se deriva del tema/hook al principio del flujo, mismo criterio que
   binarios, no se suben al repo).
 - `Desktop/Imagenes Posts/<slug>/` — imágenes finales de este carrusel, en su
   propia subcarpeta.
+- `Desktop/Posts Constelaciones/PAQUETE - <hook>.docx` — el paquete
+  consolidado del paso 16.
 
 ## Related skills
 

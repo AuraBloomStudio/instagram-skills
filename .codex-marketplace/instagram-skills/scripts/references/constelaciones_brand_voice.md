@@ -460,6 +460,88 @@ reports the actual word count/estimated duration before generating any
 audio -- but the target belongs here, next to the other structural rules,
 not only as a downstream warning.
 
+## PACKAGING_STANDARD
+
+**Applies to:** `post-constelaciones`, `carrusel-constelaciones`,
+`imagen-post-constelaciones`, `post-viral-constelaciones`. Does NOT apply to
+`historias-constelaciones` (Stories skip hashtags/CTA/book entirely per
+`STORY_STRUCTURES`, so this shape has nothing to consolidate) or to the reel
+skills (`seleccion-clips-pexels` / `narracion-voz-gemini` /
+`edicion-reel-json2video` produce video, not a publishable text+image post).
+
+Each of the four skills above, in addition to whatever per-format artifacts
+it already saves (the individual slide `.docx`/caption files for
+`carrusel-constelaciones`, the single copy `.docx` for `post-constelaciones`,
+etc. -- **this rule never replaces those**, it adds one more file on top),
+also saves ONE consolidated file:
+`Desktop/Posts Constelaciones/PAQUETE - <hook o tema de la pieza>.docx`
+(same folder as the rest of that skill's output; `post-viral-constelaciones`
+keeps its own `Virales/` subfolder, so its packaged file goes to
+`Desktop/Posts Constelaciones/Virales/PAQUETE - <hook>.docx`). This is the
+single file a human actually opens to publish the piece -- everything they
+need to copy-paste, in one place, in a fixed order, so nothing requires
+hunting across separate slide files or a mental checklist.
+
+**Fixed section order, same for all four skills:**
+
+1. **Imagen(es).** Inserted directly into the `.docx` (not just referenced
+   by path) via `python-docx`'s `add_picture`, one per image, in publish
+   order (slide 1 -> N for carousels). Each image also gets a one-line
+   caption underneath with its file path, for traceability back to
+   `Desktop/Imagenes Posts/...`. `post-viral-constelaciones` never has an
+   image (it's deliberately text-only per `POST_VIRAL_STRUCTURE`) -- this
+   section is omitted entirely for that skill, never left as an empty
+   placeholder.
+2. **Copy / caption completo.** The exact text a human pastes into
+   Facebook/Instagram, verbatim from whatever was already approved --
+   never re-summarized or rewritten for the package. For
+   `carrusel-constelaciones` this is the caption (not the 7 individual
+   slide paragraphs, which are already baked onto the images themselves).
+   For `imagen-post-constelaciones` this is the copy text from the file
+   the user handed it (written elsewhere, not by this skill) -- included
+   for completeness, not re-authored.
+3. **Primer comentario (CTA).** A NEW text, not previously part of any of
+   these skills' output -- short, 2-3 lines, its own CTA to the book
+   mapped by topic using the SAME topic -> book table as
+   `FACEBOOK_POST_STRUCTURE` (Dolor, Dinero, Mamá, Papá, Regreso; same
+   fallback to *El dolor que no te pertenece* when the topic doesn't map
+   cleanly) -- reused as-is, never a second table. Must be worded
+   DIFFERENTLY from whatever CTA sentence already lives in the main
+   copy/caption, so the two don't read as a repeated line if someone
+   reads both back to back. Example shape: "Si esto resonó contigo 👇 En
+   'El dolor que no te pertenece' encontrarás cómo soltarlo. Link en la
+   descripción." This field is independent of whichever book the main
+   copy's own CTA already named (that rule is unchanged, see "Closer,
+   CTA, and hashtags" above) -- the primer comentario is free to point to
+   the topic-correct book even when the main copy used the standing
+   *El dolor que no te pertenece* offer.
+4. **Hashtags.** Only included when the format already uses hashtags per
+   its own structure rules -- `post-constelaciones` and
+   `carrusel-constelaciones`: yes (pulled from the last paragraph of the
+   copy/caption, which is always the hashtag line per the "Closer, CTA,
+   and hashtags" rules above -- mirrored into its own section for quick
+   copy-paste, not re-invented). `post-viral-constelaciones`: no,
+   `POST_VIRAL_STRUCTURE` is explicit that neither variant carries
+   hashtags -- section omitted. `imagen-post-constelaciones`: inherits
+   whatever hashtags the copy file it's illustrating already has, via the
+   same last-paragraph extraction; never invents new ones.
+5. **Checklist.** Fixed four lines, identical wording every time, always
+   last in the document:
+   ```
+   [ ] Imagen revisada visualmente
+   [ ] Copy revisado
+   [ ] Primer comentario listo
+   [ ] Publicado
+   ```
+
+**Implementation:** `scripts/build_paquete_docx.py` assembles the file from
+already-saved inputs (the copy/caption `.docx` this skill or a sibling
+skill already wrote, the final image path(s), and the primer-comentario
+text drafted for this specific piece) -- it never re-derives copy or
+re-decides the CTA book itself, those decisions stay with whoever is
+drafting the piece. See that script's `--help` for exact arguments; each of
+the four skills' own `SKILL.md` documents the specific call it makes.
+
 ## Reference example (contrast-couplet device, for calibration)
 
 From an existing approved post, showing the "tú" body with the third-person
