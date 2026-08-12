@@ -58,21 +58,30 @@ estructura `FACEBOOK_POST_STRUCTURE`), para carruseles
 6. **Confirmar el resultado**: ruta(s) final(es) del/los `.docx`, y
    recordar que esta pieza no lleva imagen -- se publica como texto puro.
 7. **Armar el paquete consolidado** (ver `PACKAGING_STANDARD` en
-   `constelaciones_brand_voice.md` para el detalle completo) -- uno por
-   cada pieza generada; si se produjo el par diario, dos paquetes
-   separados. El libro ya se decidió en el paso 3 (tabla tema -> libro
+   `constelaciones_brand_voice.md` para el detalle completo, incluida la
+   carpeta de salida) -- uno por cada pieza generada; si se produjo el par
+   diario, dos paquetes separados, MISMO slug de micronicho para ambos (ver
+   abajo). El libro ya se decidió en el paso 3 (tabla tema -> libro
    compartida con `FACEBOOK_POST_STRUCTURE`); redactar el primer
    comentario con ESE MISMO libro pero en una redacción nueva y corta (2-3
    líneas), distinta de la frase de CTA que ya cierra la pieza -- mismo
    criterio de tono por variante que ya rige el CTA principal (directo en
-   Variante 1, suave/decreto en Variante 2). Luego correr, por cada pieza:
+   Variante 1, suave/decreto en Variante 2). Determinar el slug del
+   micronicho: si esta pieza es parte de un paquete diario junto con otras
+   piezas del mismo tema (carrusel/post/historia pedidos en la misma
+   conversación), reusar el MISMO slug ya usado para esas piezas hermanas;
+   si es una pieza suelta, derivar un slug corto del tema (mismo criterio
+   kebab-case que ya usan `carrusel-constelaciones`/
+   `seleccion-clips-pexels`). Luego correr, por cada pieza:
    ```
-   python scripts/build_paquete_docx.py "<hook o tema>" --copy-docx "<ruta al .docx del paso 5>" --primer-comentario "<texto del primer comentario>" --out-dir "Desktop/Posts Constelaciones/Virales"
+   python scripts/build_paquete_docx.py "<hook o tema>" --copy-docx "<ruta al .docx del paso 5>" --primer-comentario "<texto del primer comentario>" --micronicho "<slug>"
    ```
    Sin `--image` -- esta pieza nunca lleva imagen. Esto genera
-   `Desktop/Posts Constelaciones/Virales/PAQUETE - <hook>.docx` -- no
-   reemplaza el `.docx` del paso 5, lo complementa. Mostrar la(s) ruta(s)
-   final(es) junto con el resto del resultado.
+   `Desktop/Constelaciones - Publicaciones/<fecha de hoy> <slug>/PAQUETE -
+   <hook>.docx` -- ya NO en la subcarpeta `Virales/` (esa sigue existiendo
+   solo para el `.docx` del paso 5, que no se toca). No reemplaza el
+   `.docx` del paso 5, lo complementa. Mostrar la(s) ruta(s) final(es)
+   junto con el resto del resultado.
 
 ## Reglas duras
 

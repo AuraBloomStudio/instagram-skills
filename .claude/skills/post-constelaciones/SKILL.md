@@ -1,6 +1,6 @@
 ---
 name: post-constelaciones
-description: Draft a single-image organic Instagram/Facebook post for Constelaciones Familiares in one of 5 structures (carta directa, contraste cree-que/en-realidad, pregunta sin resolver, confesión personal, dato-manifiesto), following the brand voice documented in scripts/references/constelaciones_brand_voice.md (tú address, "Para asentar" closer, plain-URL CTA, 2 fixed + 3 topic hashtags via ig-hashtag-strategist). On approval, saves the copy as .docx in Desktop/Posts Constelaciones, generates its background photo by running scripts/generate_post_image.py (saved to Desktop/Imagenes Posts), then builds one consolidated "PAQUETE - <hook>.docx" (image + copy + a new first-comment CTA + hashtags + a publish checklist, per PACKAGING_STANDARD) via scripts/build_paquete_docx.py. Use for "hazme un post de [tema]", "necesito un post sobre [tema]". Not for carousels (use carrusel-constelaciones), not for paid ads (future ads-constelaciones), and not for generating only the image of a copy already written by hand (use imagen-post-constelaciones).
+description: Draft a single-image organic Instagram/Facebook post for Constelaciones Familiares in one of 5 structures (carta directa, contraste cree-que/en-realidad, pregunta sin resolver, confesión personal, dato-manifiesto), following the brand voice documented in scripts/references/constelaciones_brand_voice.md (tú address, "Para asentar" closer, plain-URL CTA, 2 fixed + 3 topic hashtags via ig-hashtag-strategist). On approval, saves the copy as .docx in Desktop/Posts Constelaciones, generates its background photo by running scripts/generate_post_image.py (saved to Desktop/Imagenes Posts), then builds one consolidated "PAQUETE - <hook>.docx" (image + copy + a new first-comment CTA + hashtags + a publish checklist, per PACKAGING_STANDARD) via scripts/build_paquete_docx.py, saved to Desktop/Constelaciones - Publicaciones/<fecha> <micronicho>/. Use for "hazme un post de [tema]", "necesito un post sobre [tema]". Not for carousels (use carrusel-constelaciones), not for paid ads (future ads-constelaciones), and not for generating only the image of a copy already written by hand (use imagen-post-constelaciones).
 ---
 
 # Post Constelaciones (imagen única)
@@ -59,22 +59,31 @@ a mano (`imagen-post-constelaciones`).
    tapar la cara) — sin ninguna firma ni atribución de marca, eliminada por
    completo.
 8. **Armar el paquete consolidado** (ver `PACKAGING_STANDARD` en
-   `constelaciones_brand_voice.md` para el detalle completo). Determinar el
-   libro correcto para el primer comentario aplicando la tabla tema -> libro
-   de `FACEBOOK_POST_STRUCTURE` (Dolor, Dinero, Mamá, Papá, Regreso, mismo
-   fallback a *El dolor que no te pertenece*) al tema de este post -- puede
-   ser un libro distinto del que ya nombra el CTA principal del copy, que
-   sigue siendo siempre *El dolor que no te pertenece* por la regla
-   existente de este formato. Redactar un texto de primer comentario corto
-   (2-3 líneas) con ese libro, en una redacción distinta a la del CTA que ya
-   va dentro del copy. Luego correr:
+   `constelaciones_brand_voice.md` para el detalle completo, incluida la
+   carpeta de salida). Determinar el libro correcto para el primer
+   comentario aplicando la tabla tema -> libro de `FACEBOOK_POST_STRUCTURE`
+   (Dolor, Dinero, Mamá, Papá, Regreso, mismo fallback a *El dolor que no te
+   pertenece*) al tema de este post -- puede ser un libro distinto del que
+   ya nombra el CTA principal del copy, que sigue siendo siempre *El dolor
+   que no te pertenece* por la regla existente de este formato. Redactar un
+   texto de primer comentario corto (2-3 líneas) con ese libro, en una
+   redacción distinta a la del CTA que ya va dentro del copy. Determinar el
+   slug del micronicho: si este post es parte de un paquete diario junto con
+   otras piezas del mismo tema (carrusel/virales/historia pedidos en la
+   misma conversación), reusar el MISMO slug ya usado para esas piezas
+   hermanas -- nunca derivar uno distinto solo porque el hook de este post
+   es distinto. Si es una pieza suelta, derivar un slug corto del tema
+   (mismo criterio kebab-case que ya usan `carrusel-constelaciones`/
+   `seleccion-clips-pexels`). Luego correr:
    ```
-   python scripts/build_paquete_docx.py "<título o hook>" --copy-docx "<ruta al .docx del paso 5>" --image "<ruta al PNG del paso 6>" --primer-comentario "<texto del primer comentario>"
+   python scripts/build_paquete_docx.py "<título o hook>" --copy-docx "<ruta al .docx del paso 5>" --image "<ruta al PNG del paso 6>" --primer-comentario "<texto del primer comentario>" --micronicho "<slug>"
    ```
-   Esto genera `Desktop/Posts Constelaciones/PAQUETE - <título o hook>.docx`
-   -- no reemplaza el `.docx` del paso 5 ni el PNG del paso 6, los
-   complementa. Mostrar la ruta final al usuario junto con el resto del
-   resultado.
+   Esto genera
+   `Desktop/Constelaciones - Publicaciones/<fecha de hoy> <slug>/PAQUETE -
+   <título o hook>.docx` -- no reemplaza el `.docx` del paso 5 ni el PNG del
+   paso 6 (esos siguen guardándose donde siempre, en `Desktop/Posts
+   Constelaciones/` y `Desktop/Imagenes Posts/`), los complementa. Mostrar
+   la ruta final al usuario junto con el resto del resultado.
 
 ## Reglas duras
 

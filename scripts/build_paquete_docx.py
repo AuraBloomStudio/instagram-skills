@@ -19,7 +19,9 @@ Usage:
     --copy-docx "<ruta al .docx con el copy/caption ya aprobado>" \\
     --image "<ruta a imagen 1>" [--image "<ruta a imagen 2>" ...] \\
     --primer-comentario "<texto corto, 2-3 líneas, CTA distinto al de la copy>" \\
-    [--out-dir "<carpeta de salida, default Desktop/Posts Constelaciones>"]
+    --micronicho "<slug corto del micronicho, ej. dolor-heredado>" \\
+    [--fecha "<YYYY-MM-DD, default hoy>"] \\
+    [--out-dir "<override puntual, reemplaza --micronicho/--fecha>"]
 
 --image se puede repetir: 0 veces para post-viral-constelaciones (nunca
 lleva imagen), 1 vez para post-constelaciones/imagen-post-constelaciones,
@@ -30,10 +32,22 @@ Hashtags nunca se piden por separado -- se extraen automáticamente del
 van los hashtags en post-constelaciones/carrusel-constelaciones). Si el
 copy no termina en un párrafo de hashtags (post-viral-constelaciones, que
 nunca los lleva), esa sección del paquete se omite entera.
+
+**Carpeta de salida.** Por defecto (sin --out-dir), el paquete se guarda en
+`Desktop/Constelaciones - Publicaciones/<fecha> <micronicho>/` -- una sola
+carpeta por día+micronicho que junta TODAS las piezas de ese micronicho
+(carrusel, post estático, virales), sin importar cuál de las 4 skills la
+generó. --micronicho es obligatorio salvo que se pase --out-dir
+explícitamente. Cuando un mismo micronicho tiene varias piezas el mismo día
+(el caso normal -- un carrusel + un post + 2 virales), cada llamada debe
+pasar el MISMO --micronicho para que todas caigan en la misma carpeta en
+vez de crear una por pieza; ver PACKAGING_STANDARD para el criterio de
+cuándo reusar el slug de una pieza hermana vs. derivar uno nuevo.
 """
 from __future__ import annotations
 
 import argparse
+import datetime
 import os
 import sys
 from pathlib import Path
@@ -41,7 +55,7 @@ from pathlib import Path
 import docx
 from docx.shared import Inches
 
-DEFAULT_OUT_DIR = Path(os.path.expanduser("~")) / "Desktop" / "Posts Constelaciones"
+BASE_PUBLICACIONES_DIR = Path(os.path.expanduser("~")) / "Desktop" / "Constelaciones - Publicaciones"
 
 CHECKLIST_ITEMS = [
     "[ ] Imagen revisada visualmente",
@@ -129,10 +143,35 @@ def main() -> int:
         help="Texto corto (2-3 líneas) para fijar en el primer comentario, con su propio CTA al libro correcto.",
     )
     parser.add_argument(
-        "--out-dir", default=str(DEFAULT_OUT_DIR),
-        help=f'Carpeta de salida (default: "{DEFAULT_OUT_DIR}")',
+        "--micronicho", default=None,
+        help="Slug corto del micronicho (ej. 'dolor-heredado'), reusado igual "
+        "entre todas las piezas del mismo día/tema para que caigan en la "
+        "misma carpeta. Obligatorio salvo que se pase --out-dir.",
+    )
+    parser.add_argument(
+        "--fecha", default=None,
+        help="Fecha YYYY-MM-DD para el nombre de la carpeta (default: hoy). "
+        "Solo tiene efecto junto con --micronicho.",
+    )
+    parser.add_argument(
+        "--out-dir", default=None,
+        help="Override puntual de la carpeta de salida completa -- reemplaza "
+        "el cálculo automático por --micronicho/--fecha.",
     )
     args = parser.parse_args()
+
+    if args.out_dir:
+        out_dir = Path(args.out_dir)
+    elif args.micronicho:
+        fecha = args.fecha or datetime.date.today().isoformat()
+        out_dir = BASE_PUBLICACIONES_DIR / f"{fecha} {args.micronicho}"
+    else:
+        print(
+            "Error: falta --micronicho (o --out-dir explícito) -- no se puede "
+            "calcular la carpeta de salida.",
+            file=sys.stderr,
+        )
+        return 1
 
     try:
         out_path = build_paquete(
@@ -140,7 +179,7 @@ def main() -> int:
             copy_docx=Path(args.copy_docx),
             images=args.image,
             primer_comentario=args.primer_comentario,
-            out_dir=Path(args.out_dir),
+            out_dir=out_dir,
         )
     except PackagingError as e:
         print(f"Error: {e}", file=sys.stderr)

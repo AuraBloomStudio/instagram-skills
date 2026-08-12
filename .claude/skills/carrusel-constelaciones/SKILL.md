@@ -228,24 +228,32 @@ se deriva del tema/hook al principio del flujo, mismo criterio que
     (`⚠ protagonista distinta`, `⚠ match aproximado`, slides sin foto
     encontrada). Recordar que no se agrega firma de marca a ninguna slide.
 16. **Armar el paquete consolidado** (ver `PACKAGING_STANDARD` en
-    `constelaciones_brand_voice.md` para el detalle completo). Determinar el
-    libro correcto para el primer comentario aplicando la tabla tema -> libro
-    de `FACEBOOK_POST_STRUCTURE` (Dolor, Dinero, Mamá, Papá, Regreso, mismo
-    fallback a *El dolor que no te pertenece*) al tema de este carrusel --
-    puede ser un libro distinto del que ya nombra el bridge del CTA de la
-    última slide. Redactar un texto de primer comentario corto (2-3 líneas)
-    con ese libro, en una redacción distinta a la del CTA que ya va en la
-    slide/caption. Luego correr:
+    `constelaciones_brand_voice.md` para el detalle completo, incluida la
+    carpeta de salida). Determinar el libro correcto para el primer
+    comentario aplicando la tabla tema -> libro de `FACEBOOK_POST_STRUCTURE`
+    (Dolor, Dinero, Mamá, Papá, Regreso, mismo fallback a *El dolor que no te
+    pertenece*) al tema de este carrusel -- puede ser un libro distinto del
+    que ya nombra el bridge del CTA de la última slide. Redactar un texto de
+    primer comentario corto (2-3 líneas) con ese libro, en una redacción
+    distinta a la del CTA que ya va en la slide/caption. Determinar el slug
+    del micronicho para la carpeta -- **distinto del `<slug>` del paso 1**,
+    que solo nombra la subcarpeta de `Imagenes Posts`: si este carrusel es
+    parte de un paquete diario junto con otras piezas del mismo tema (post
+    estático/virales/historia pedidos en la misma conversación), reusar el
+    MISMO slug de micronicho ya usado para esas piezas hermanas. Si es una
+    pieza suelta, puede coincidir con el `<slug>` del paso 1. Luego correr:
     ```
-    python scripts/build_paquete_docx.py "<hook>" --copy-docx "<ruta a la Caption.docx del paso 10>" --image "<ruta slide 1>" --image "<ruta slide 2>" ... --image "<ruta última slide>" --primer-comentario "<texto del primer comentario>"
+    python scripts/build_paquete_docx.py "<hook>" --copy-docx "<ruta a la Caption.docx del paso 10>" --image "<ruta slide 1>" --image "<ruta slide 2>" ... --image "<ruta última slide>" --primer-comentario "<texto del primer comentario>" --micronicho "<slug de micronicho>"
     ```
     `--image` se repite una vez por slide, en el mismo orden de publicación
     (hook primero, CTA al final) -- nunca la caption, que no tiene imagen
     propia. Esto genera
-    `Desktop/Posts Constelaciones/PAQUETE - <hook>.docx` -- no reemplaza los
-    `.docx` de slide/caption del paso 10 ni las imágenes del paso 14, los
-    complementa. Mostrar la ruta final al usuario junto con el resto del
-    resultado.
+    `Desktop/Constelaciones - Publicaciones/<fecha de hoy> <slug de
+    micronicho>/PAQUETE - <hook>.docx` -- no reemplaza los `.docx` de
+    slide/caption del paso 10 ni las imágenes del paso 14 (esos siguen
+    guardándose donde siempre, en `Desktop/Posts Constelaciones/` y
+    `Desktop/Imagenes Posts/<slug>/`), los complementa. Mostrar la ruta
+    final al usuario junto con el resto del resultado.
 
 ## Reglas duras
 
@@ -333,8 +341,8 @@ se deriva del tema/hook al principio del flujo, mismo criterio que
   binarios, no se suben al repo).
 - `Desktop/Imagenes Posts/<slug>/` — imágenes finales de este carrusel, en su
   propia subcarpeta.
-- `Desktop/Posts Constelaciones/PAQUETE - <hook>.docx` — el paquete
-  consolidado del paso 16.
+- `Desktop/Constelaciones - Publicaciones/<fecha> <slug de micronicho>/PAQUETE
+  - <hook>.docx` — el paquete consolidado del paso 16.
 
 ## Related skills
 

@@ -472,15 +472,53 @@ skills (`seleccion-clips-pexels` / `narracion-voz-gemini` /
 Each of the four skills above, in addition to whatever per-format artifacts
 it already saves (the individual slide `.docx`/caption files for
 `carrusel-constelaciones`, the single copy `.docx` for `post-constelaciones`,
-etc. -- **this rule never replaces those**, it adds one more file on top),
-also saves ONE consolidated file:
-`Desktop/Posts Constelaciones/PAQUETE - <hook o tema de la pieza>.docx`
-(same folder as the rest of that skill's output; `post-viral-constelaciones`
-keeps its own `Virales/` subfolder, so its packaged file goes to
-`Desktop/Posts Constelaciones/Virales/PAQUETE - <hook>.docx`). This is the
-single file a human actually opens to publish the piece -- everything they
-need to copy-paste, in one place, in a fixed order, so nothing requires
-hunting across separate slide files or a mental checklist.
+the images in `Desktop/Imagenes Posts/...`, etc. -- **this rule never
+replaces those, and none of them move**; the packaging step only adds one
+more file on top), also saves ONE consolidated file:
+`Desktop/Constelaciones - Publicaciones/<fecha YYYY-MM-DD> <slug de
+micronicho>/PAQUETE - <hook o tema de la pieza>.docx`. This is the single
+file a human actually opens to publish the piece -- everything they need to
+copy-paste, in one place, in a fixed order, so nothing requires hunting
+across separate slide files or a mental checklist.
+
+**Carpeta por día + micronicho, no por skill ni por formato.** Before this
+folder existed, each skill's packaged file sat next to its own raw output
+(`Desktop/Posts Constelaciones/`, or `Virales/` for
+`post-viral-constelaciones`), which meant a single day's campaign around one
+micronicho ended up with its finished pieces scattered across several
+folders. `Desktop/Constelaciones - Publicaciones/<fecha> <slug>/` fixes
+that: every `PAQUETE - *.docx` generated for the same micronicho on the same
+day lands in the SAME folder, regardless of which of the four skills
+produced it -- a carousel, a static post, and both viral pieces from one
+day's package all end up as siblings in one folder, ready to hand off. The
+folder is created on first use (`mkdir -p` semantics) and reused by every
+later call with the same date+slug, never recreated.
+- **`<fecha>`** is today's date, `YYYY-MM-DD`, computed automatically by
+  `scripts/build_paquete_docx.py` unless a piece is explicitly backdated.
+- **`<slug de micronicho>`** is a short kebab-case slug (same convention
+  `carrusel-constelaciones`/`seleccion-clips-pexels` already use for their
+  own slugs) that names the micronicho/topic of the day, NOT the individual
+  piece's own hook -- those are two different things and must not be
+  confused. A carousel hooked "Ese Miedo Que Sientes No Es Tuyo" and a
+  static post hooked "Ese Peso Que Cargas No Nació Contigo" can both belong
+  to the same day's micronicho slug `dolor-heredado` even though neither
+  hook contains that string. **Whenever a piece is drafted as part of a
+  broader daily package together with sibling pieces on the same topic
+  (requested in the same conversation), reuse the EXACT SAME micronicho
+  slug across every sibling** -- never derive a fresh slug per piece just
+  because each piece's own hook differs. Only derive a new slug from a
+  piece's own topic when it's a standalone request with no sibling pieces
+  that day.
+- This folder is exclusively for the consolidated `PAQUETE` files (and,
+  when moved there by hand for the same day's campaign, the finished
+  `reel_final.mp4` -- see `edicion-reel-json2video`, which does not save
+  there on its own). Every other artifact each skill produces along the way
+  (slide `.docx`, caption `.docx`, plain copy `.docx`, plain PNG images)
+  keeps saving exactly where it already did -- `Desktop/Posts
+  Constelaciones/`, `Desktop/Posts Constelaciones/Virales/`, `Desktop/
+  Imagenes Posts/`, `Desktop/Imagenes Posts/<slug>/` -- unchanged. This was
+  a deliberate choice, not an oversight: only the final publish-ready
+  artifact needed a cleaner home, not every intermediate file.
 
 **Fixed section order, same for all four skills:**
 
@@ -539,8 +577,12 @@ already-saved inputs (the copy/caption `.docx` this skill or a sibling
 skill already wrote, the final image path(s), and the primer-comentario
 text drafted for this specific piece) -- it never re-derives copy or
 re-decides the CTA book itself, those decisions stay with whoever is
-drafting the piece. See that script's `--help` for exact arguments; each of
-the four skills' own `SKILL.md` documents the specific call it makes.
+drafting the piece. `--micronicho "<slug>"` computes the
+`Desktop/Constelaciones - Publicaciones/<fecha> <slug>/` destination
+automatically (today's date unless `--fecha` overrides it) and is
+mandatory unless `--out-dir` is passed as an explicit one-off override. See
+that script's `--help` for exact arguments; each of the four skills' own
+`SKILL.md` documents the specific call it makes.
 
 ## Reference example (contrast-couplet device, for calibration)
 

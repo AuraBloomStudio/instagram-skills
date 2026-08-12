@@ -50,21 +50,27 @@ marca (nombre de autor, @handle) a ningún post -- se eliminó por completo.
    cual lo imprime el script (suele traer la causa: cuota, modelo no
    disponible, etc.) en vez de reinterpretarlo.
 6. **Armar el paquete consolidado** (ver `PACKAGING_STANDARD` en
-   `constelaciones_brand_voice.md` para el detalle completo). Leer el texto
-   del copy ya aprobado (el mismo archivo del paso 1) para identificar su
-   tema y aplicar la tabla tema -> libro de `FACEBOOK_POST_STRUCTURE`
-   (Dolor, Dinero, Mamá, Papá, Regreso, mismo fallback a *El dolor que no te
-   pertenece*) -- puede ser un libro distinto del que ya nombra el CTA
-   dentro del copy. Redactar un texto de primer comentario corto (2-3
-   líneas) con ese libro, en una redacción distinta a la del CTA que ya
-   trae el copy. Luego correr:
+   `constelaciones_brand_voice.md` para el detalle completo, incluida la
+   carpeta de salida). Leer el texto del copy ya aprobado (el mismo archivo
+   del paso 1) para identificar su tema y aplicar la tabla tema -> libro de
+   `FACEBOOK_POST_STRUCTURE` (Dolor, Dinero, Mamá, Papá, Regreso, mismo
+   fallback a *El dolor que no te pertenece*) -- puede ser un libro distinto
+   del que ya nombra el CTA dentro del copy. Redactar un texto de primer
+   comentario corto (2-3 líneas) con ese libro, en una redacción distinta a
+   la del CTA que ya trae el copy. Determinar el slug del micronicho: si
+   esta imagen es parte de un paquete diario junto con otras piezas del
+   mismo tema, reusar el MISMO slug ya usado para esas piezas hermanas; si
+   es una pieza suelta, derivar un slug corto del tema del copy (mismo
+   criterio kebab-case que ya usan `carrusel-constelaciones`/
+   `seleccion-clips-pexels`). Luego correr:
    ```
-   python scripts/build_paquete_docx.py "<nombre del archivo sin extensión>" --copy-docx "<ruta al copy del paso 1>" --image "<ruta al PNG del paso 2>" --primer-comentario "<texto del primer comentario>"
+   python scripts/build_paquete_docx.py "<nombre del archivo sin extensión>" --copy-docx "<ruta al copy del paso 1>" --image "<ruta al PNG del paso 2>" --primer-comentario "<texto del primer comentario>" --micronicho "<slug>"
    ```
    Esto genera
-   `Desktop/Posts Constelaciones/PAQUETE - <nombre>.docx` -- no reemplaza ni
-   el copy original ni el PNG generado, los complementa. Mostrar la ruta
-   final al usuario junto con el resto del resultado.
+   `Desktop/Constelaciones - Publicaciones/<fecha de hoy> <slug>/PAQUETE -
+   <nombre>.docx` -- no reemplaza ni el copy original ni el PNG generado
+   (esos siguen guardándose donde siempre), los complementa. Mostrar la
+   ruta final al usuario junto con el resto del resultado.
 
 ## Reglas duras
 
