@@ -177,6 +177,93 @@ If a post's theme doesn't map cleanly to one of these five, default to *El
 dolor que no te pertenece* (the standing offer, same fallback logic as the
 Instagram CTA rule above) unless the user says otherwise for that post.
 
+## POST_VIRAL_STRUCTURE
+
+`post-viral-constelaciones` reads this section, not `FACEBOOK_POST_STRUCTURE`
+above -- a different pair of high-conversion viral Facebook formats, kept
+separate because neither variant follows the essay-paragraph shape or the
+"Para asentar" closer that `FACEBOOK_POST_STRUCTURE` requires. There is no
+pool of choices here: exactly **two fixed variants**, each with its own
+literal fixed header, that strictly **alternate** rather than rotate (see
+"Alternation" below).
+
+**Address exception (read before drafting either variant).** The Voice
+fingerprint's "tú" rule does not apply to this section. Variante 1 uses
+formal **"usted"** throughout -- a deliberate register shift for the
+direct-address "you should know" viral format, not a mistake to correct
+back to "tú." Variante 2 uses no second-person address at all (a first-person
+decree spoken to "mis hijos"). Neither variant uses "Para asentar" -- the CTA
+described below is each variant's only closer mechanic, replacing it
+entirely.
+
+**VARIANTE 1 -- "USTED DEBERÍA SABER QUE:"**
+
+- Encabezado fijo, literal, siempre igual: `USTED DEBERÍA SABER QUE:`
+- Párrafo 1: nombra un patrón sistémico concreto y su consecuencia (p. ej.
+  intervenir en la vida de otros, sostener económicamente a los padres,
+  silencio evitativo, salvar a otros), en tono directo de segunda persona
+  formal ("Su... es...").
+- Párrafo 2: abre con "Reconozca que..." o "Comprenda que...", da el
+  reencuadre sistémico (qué hacer distinto), y cierra con una frase en
+  primera persona **entre comillas** que reafirma una jerarquía familiar
+  sana (ej. "Yo soy la grande y tú eres el pequeño...", "Respeto sus
+  problemas y su destino tal como son...").
+- Extensión total (sin contar el CTA): 900-1,300 caracteres.
+- Sin hashtags, sin firma.
+
+**VARIANTE 2 -- "GUARDA ESTE DECRETO EN TU CORAZÓN"**
+
+- Encabezado fijo, literal: `GUARDA ESTE DECRETO EN TU CORAZÓN`, seguido de
+  un subtítulo variable **en cursiva** que describe el tema específico del
+  decreto (ej. *"Para activar la prosperidad y el camino de tus hijos"*).
+- Cuerpo: decreto/oración en primera persona dirigida a los hijos, tono de
+  bendición/afirmación positiva -- sin reencuadre de conflicto, a
+  diferencia del movimiento "nombrar la causa oculta" que rige el resto de
+  la marca.
+- Cierre fijo, literal: `Así es. Gracias, gracias, gracias.` o la variante
+  `Hecho está. Gracias.`
+- Extensión total (sin contar el CTA): 700-1,000 caracteres.
+- Sin hashtags, sin firma.
+
+**CTA obligatorio en ambas variantes (esto es lo nuevo que aporta este
+skill -- los ejemplos originales que inspiraron ambas variantes no lo
+tenían).**
+
+- Va DESPUÉS del cierre de cada variante: después de la frase entre
+  comillas en la Variante 1; después de "gracias, gracias, gracias." (o
+  "Hecho está. Gracias.") en la Variante 2.
+- Bridge corto, 1-2 líneas, que conecta el tema tratado con el libro
+  correcto usando la MISMA tabla de mapeo tema -> libro de
+  `FACEBOOK_POST_STRUCTURE` (Dolor, Dinero, Mamá, Papá, Regreso) -- no se
+  duplica la tabla aquí, se reutiliza tal cual, incluido el mismo
+  fallback a *El dolor que no te pertenece* cuando el tema no mapea
+  limpiamente.
+- Siempre cierra con la frase literal `El link está en la descripción.` --
+  nunca el link inline, mismo principio que el CTA de carrusel: una pieza
+  pensada para copiar y pegar directo en Facebook no puede asumir que un
+  link dentro del texto sea clicable, así que la instrucción siempre remite
+  a la descripción/bio.
+- El tono del bridge se adapta a la variante, nunca al revés:
+  - Variante 1: directo, en línea con el registro de instrucción/consejo
+    de la pieza -- ej. "Si este patrón te tocó, en '[libro]' encontrarás
+    cómo soltarlo."
+  - Variante 2: mantiene el tono suave de decreto/bendición, nunca un giro
+    abrupto a venta -- ej. "Si quieres profundizar en esta sanación, te
+    espera '[libro]'."
+- El CTA nunca rompe el ritmo ni el registro emocional de la pieza -- debe
+  leerse como una continuación natural del cierre, no como un corte
+  publicitario pegado al final.
+
+**Alternation (not random rotation).** `post-viral-constelaciones` tracks
+the last variant used in `testing/copy_gen_state.json`, key
+`"post_viral_variant"` -- a single string ("1" or "2"), not a list like the
+other rotation keys, since with only 2 possible values "avoid the last 2"
+would mean "never repeat," which strict alternation already guarantees more
+simply. Each new piece uses whichever variant is NOT the stored value, then
+overwrites it. When generating the daily pair of 2 pieces in one request,
+produce one of each variant (in either order) rather than reading state
+twice for the same request.
+
 ## CAROUSEL_STRUCTURES
 
 `carrusel-constelaciones` rotates through these, avoiding the last 2 used

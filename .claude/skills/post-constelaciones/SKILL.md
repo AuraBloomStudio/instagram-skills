@@ -93,4 +93,7 @@ a mano (`imagen-post-constelaciones`).
 - `carrusel-constelaciones` — para carruseles multi-slide.
 - `imagen-post-constelaciones` — solo la imagen, cuando el copy ya está
   escrito a mano.
+- `post-viral-constelaciones` — para los formatos virales de solo texto
+  ("USTED DEBERÍA SABER QUE:" / "GUARDA ESTE DECRETO EN TU CORAZÓN"), no
+  para el post ensayo largo que cubre esta skill.
 - `ig-hashtag-strategist` (bundle público) — sizing de los 3 hashtags de tema.
