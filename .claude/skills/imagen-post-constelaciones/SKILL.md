@@ -64,13 +64,14 @@ marca (nombre de autor, @handle) a ningún post -- se eliminó por completo.
    criterio kebab-case que ya usan `carrusel-constelaciones`/
    `seleccion-clips-pexels`). Luego correr:
    ```
-   python scripts/build_paquete_docx.py "<nombre del archivo sin extensión>" --copy-docx "<ruta al copy del paso 1>" --image "<ruta al PNG del paso 2>" --primer-comentario "<texto del primer comentario>" --micronicho "<slug>"
+   python scripts/build_paquete_docx.py "<nombre del archivo sin extensión>" --copy-docx "<ruta al copy del paso 1>" --image "<ruta al PNG del paso 2>" --primer-comentario "<texto del primer comentario>" --tipo-pieza imagen-texto --micronicho "<slug>"
    ```
    Esto genera
-   `Desktop/Constelaciones - Publicaciones/<fecha de hoy> <slug>/PAQUETE -
-   <nombre>.docx` -- no reemplaza ni el copy original ni el PNG generado
-   (esos siguen guardándose donde siempre), los complementa. Mostrar la
-   ruta final al usuario junto con el resto del resultado.
+   `Desktop/Constelaciones - Publicaciones/<fecha de hoy> <slug>/Paquete 1 -
+   Imagen y Texto Largo/PAQUETE - <nombre>.docx` -- no reemplaza ni el copy
+   original ni el PNG generado (esos siguen guardándose donde siempre), los
+   complementa. Mostrar la ruta final al usuario junto con el resto del
+   resultado.
 
 ## Reglas duras
 

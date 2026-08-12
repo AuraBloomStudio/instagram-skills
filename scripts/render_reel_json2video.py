@@ -26,10 +26,13 @@ Flow:
      bottom) and a 0.4s crossfade into the next. If --hook-main/--hook-accent
      are given, a leading hook scene (big two-font headline over the first
      clip) plays before the narration audio starts.
-  6. Download the final MP4 to scripts/output_reels/<slug>/reel_final.mp4 and
-     delete the uploaded source assets from JSON2Video's media library (its
-     free tier only grants ~50MB of storage, so cleaning up after every
-     render matters).
+  6. Download the final MP4 to scripts/output_reels/<slug>/reel_final.mp4 by
+     default, or to Desktop/Constelaciones - Publicaciones/<fecha>
+     <micronicho>/Paquete 4 - Reel/reel_final.mp4 when --micronicho is given
+     (the shared PACKAGING_STANDARD daily folder build_paquete_docx.py's
+     other three piece types already use), and delete the uploaded source
+     assets from JSON2Video's media library (its free tier only grants
+     ~50MB of storage, so cleaning up after every render matters).
 
 JSON2VIDEO_API_KEY is never hardcoded. If it is not already set as an
 environment variable, this script prompts for it (input is masked) and
@@ -37,11 +40,12 @@ offers to save it to the local .env file, which is already gitignored --
 same pattern as generate_post_image.py and generate_reel_narration.py.
 
 Usage:
-  python scripts/render_reel_json2video.py <reel_slug> [--music PATH] [--quality high|medium|low] [--hook-main "TEXTO"] [--hook-accent "texto"]
+  python scripts/render_reel_json2video.py <reel_slug> [--music PATH] [--quality high|medium|low] [--hook-main "TEXTO"] [--hook-accent "texto"] [--micronicho "slug" [--fecha "YYYY-MM-DD"]]
 """
 from __future__ import annotations
 
 import argparse
+import datetime
 import getpass
 import math
 import os
@@ -56,6 +60,8 @@ from typing import Optional
 import requests
 from dotenv import load_dotenv, set_key
 
+from build_paquete_docx import BASE_PUBLICACIONES_DIR
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ENV_PATH = REPO_ROOT / ".env"
 
@@ -64,6 +70,11 @@ J2V_API_BASE = "https://api.json2video.com/v2"
 DEFAULT_CLIPS_DIR = REPO_ROOT / "scripts" / "output_clips"
 DEFAULT_AUDIO_DIR = REPO_ROOT / "scripts" / "output_audio"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "scripts" / "output_reels"
+
+# Fixed subfolder name for the reel inside a day's publication folder --
+# same PACKAGING_STANDARD convention build_paquete_docx.py uses for the
+# other three piece types, see that script's PIECE_TYPE_SUBFOLDERS.
+REEL_SUBFOLDER = "Paquete 4 - Reel"
 
 # Fixed brand background-music track, used automatically when --music isn't
 # passed -- same "one locked-in default, no need to ask every time" pattern
@@ -768,7 +779,18 @@ def main() -> int:
     parser.add_argument("--hook-accent", default=None, help="Frase de acento del gancho (dorado palido #FAE8A8, Playfair Display italic). Requiere --hook-main.")
     parser.add_argument("--clips-dir", default=str(DEFAULT_CLIPS_DIR), help="Carpeta base de clips (default: scripts/output_clips)")
     parser.add_argument("--audio-dir", default=str(DEFAULT_AUDIO_DIR), help="Carpeta base de audio (default: scripts/output_audio)")
-    parser.add_argument("--out-dir", default=str(DEFAULT_OUTPUT_DIR), help="Carpeta base de salida (default: scripts/output_reels)")
+    parser.add_argument("--out-dir", default=str(DEFAULT_OUTPUT_DIR), help="Carpeta base de salida (default: scripts/output_reels) -- ignorado si se pasa --micronicho")
+    parser.add_argument(
+        "--micronicho", default=None,
+        help="Slug del micronicho del dia (ej. 'dolor-heredado'). Si se pasa, "
+        "el reel se guarda en Desktop/Constelaciones - Publicaciones/<fecha> "
+        f"<micronicho>/{REEL_SUBFOLDER}/reel_final.mp4 en vez de --out-dir/<reel_slug>/.",
+    )
+    parser.add_argument(
+        "--fecha", default=None,
+        help="Fecha YYYY-MM-DD para la carpeta del dia (default: hoy). Solo "
+        "tiene efecto junto con --micronicho.",
+    )
     args = parser.parse_args()
 
     if bool(args.hook_main) != bool(args.hook_accent):
@@ -926,7 +948,11 @@ def main() -> int:
         print(f"Proyecto: {project}. Esperando render (poll cada {POLL_INTERVAL_S}s)...")
         result = poll_movie(project, api_key)
 
-        out_dir = Path(args.out_dir) / args.reel_slug
+        if args.micronicho:
+            fecha = args.fecha or datetime.date.today().isoformat()
+            out_dir = BASE_PUBLICACIONES_DIR / f"{fecha} {args.micronicho}" / REEL_SUBFOLDER
+        else:
+            out_dir = Path(args.out_dir) / args.reel_slug
         out_path = out_dir / "reel_final.mp4"
         print(f"Descargando video final a {out_path}...")
         download_final(result["url"], out_path)

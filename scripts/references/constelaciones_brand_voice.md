@@ -463,23 +463,32 @@ not only as a downstream warning.
 ## PACKAGING_STANDARD
 
 **Applies to:** `post-constelaciones`, `carrusel-constelaciones`,
-`imagen-post-constelaciones`, `post-viral-constelaciones`. Does NOT apply to
-`historias-constelaciones` (Stories skip hashtags/CTA/book entirely per
-`STORY_STRUCTURES`, so this shape has nothing to consolidate) or to the reel
-skills (`seleccion-clips-pexels` / `narracion-voz-gemini` /
-`edicion-reel-json2video` produce video, not a publishable text+image post).
+`imagen-post-constelaciones`, `post-viral-constelaciones` -- these four call
+`scripts/build_paquete_docx.py` to produce a `PAQUETE - *.docx`.
+`edicion-reel-json2video` doesn't build a `.docx` package (a reel is a
+video) but DOES share the same day+micronicho folder via its own
+`--micronicho` flag (see "Numbered subfolders" below) -- it counts as part
+of this standard's folder convention even though it never touches
+`build_paquete_docx.py`. Does NOT apply to `historias-constelaciones`
+(Stories skip hashtags/CTA/book entirely per `STORY_STRUCTURES`, so the
+normal packaging shape has nothing to consolidate -- see the
+`Carrusel Historias/` note below for how a Story's package is still handled
+today) or to `seleccion-clips-pexels`/`narracion-voz-gemini` (intermediate
+reel assets, never a publish-ready piece on their own).
 
 Each of the four skills above, in addition to whatever per-format artifacts
 it already saves (the individual slide `.docx`/caption files for
 `carrusel-constelaciones`, the single copy `.docx` for `post-constelaciones`,
 the images in `Desktop/Imagenes Posts/...`, etc. -- **this rule never
 replaces those, and none of them move**; the packaging step only adds one
-more file on top), also saves ONE consolidated file:
+more file on top), also saves ONE consolidated file into a fixed,
+numbered subfolder of the day's publication folder:
 `Desktop/Constelaciones - Publicaciones/<fecha YYYY-MM-DD> <slug de
-micronicho>/PAQUETE - <hook o tema de la pieza>.docx`. This is the single
-file a human actually opens to publish the piece -- everything they need to
-copy-paste, in one place, in a fixed order, so nothing requires hunting
-across separate slide files or a mental checklist.
+micronicho>/<subcarpeta fija del tipo de pieza>/PAQUETE - <hook o tema de la
+pieza>.docx`. This is the single file a human actually opens to publish the
+piece -- everything they need to copy-paste, in one place, in a fixed order,
+so nothing requires hunting across separate slide files or a mental
+checklist.
 
 **Carpeta por día + micronicho, no por skill ni por formato.** Before this
 folder existed, each skill's packaged file sat next to its own raw output
@@ -488,11 +497,12 @@ folder existed, each skill's packaged file sat next to its own raw output
 micronicho ended up with its finished pieces scattered across several
 folders. `Desktop/Constelaciones - Publicaciones/<fecha> <slug>/` fixes
 that: every `PAQUETE - *.docx` generated for the same micronicho on the same
-day lands in the SAME folder, regardless of which of the four skills
-produced it -- a carousel, a static post, and both viral pieces from one
-day's package all end up as siblings in one folder, ready to hand off. The
-folder is created on first use (`mkdir -p` semantics) and reused by every
-later call with the same date+slug, never recreated.
+day lands in the SAME day folder, regardless of which skill produced it --
+a carousel, a static post, and both viral pieces from one day's package all
+end up as siblings inside it, ready to hand off. The folder (and each
+numbered subfolder inside it) is created on first use (`mkdir -p`
+semantics) and reused by every later call with the same date+slug, never
+recreated.
 - **`<fecha>`** is today's date, `YYYY-MM-DD`, computed automatically by
   `scripts/build_paquete_docx.py` unless a piece is explicitly backdated.
 - **`<slug de micronicho>`** is a short kebab-case slug (same convention
@@ -509,16 +519,56 @@ later call with the same date+slug, never recreated.
   because each piece's own hook differs. Only derive a new slug from a
   piece's own topic when it's a standalone request with no sibling pieces
   that day.
-- This folder is exclusively for the consolidated `PAQUETE` files (and,
-  when moved there by hand for the same day's campaign, the finished
-  `reel_final.mp4` -- see `edicion-reel-json2video`, which does not save
-  there on its own). Every other artifact each skill produces along the way
-  (slide `.docx`, caption `.docx`, plain copy `.docx`, plain PNG images)
-  keeps saving exactly where it already did -- `Desktop/Posts
+- This folder is exclusively for the consolidated `PAQUETE` files and the
+  finished `reel_final.mp4`. Every other artifact each skill produces along
+  the way (slide `.docx`, caption `.docx`, plain copy `.docx`, plain PNG
+  images) keeps saving exactly where it already did -- `Desktop/Posts
   Constelaciones/`, `Desktop/Posts Constelaciones/Virales/`, `Desktop/
   Imagenes Posts/`, `Desktop/Imagenes Posts/<slug>/` -- unchanged. This was
   a deliberate choice, not an oversight: only the final publish-ready
   artifact needed a cleaner home, not every intermediate file.
+
+**Numbered subfolders, one per piece type, fixed names (never freeform):**
+```
+<fecha> <slug de micronicho>/
+├── Paquete 1 - Imagen y Texto Largo/      <- post-constelaciones,
+│                                             imagen-post-constelaciones
+├── Paquete 2 - Carrusel/
+│   ├── Carrusel Publicación/              <- carrusel-constelaciones
+│   └── Carrusel Historias/                <- historias-constelaciones,
+│                                             packaged by hand for now (see
+│                                             below), not automated
+├── Paquete 3 - Texto Reflexivo/           <- post-viral-constelaciones
+│                                             (both variants land here,
+│                                             one PAQUETE file each)
+├── Paquete 4 - Reel/                      <- edicion-reel-json2video
+│                                             (reel_final.mp4, not a
+│                                             build_paquete_docx.py file)
+└── RESUMEN DEL DÍA.docx                   <- at the top level, not inside
+                                               a numbered subfolder
+```
+`scripts/build_paquete_docx.py`'s `--tipo-pieza` flag
+(`imagen-texto`/`carrusel`/`carrusel-historia`/`texto-reflexivo`) computes
+the exact subfolder via its `PIECE_TYPE_SUBFOLDERS` constant, so every skill
+produces byte-identical folder names instead of each one typing its own
+slightly different spelling. `edicion-reel-json2video` doesn't call
+`build_paquete_docx.py` at all (a reel is a video, not a `.docx` package) --
+`scripts/render_reel_json2video.py` computes `Paquete 4 - Reel/` itself from
+its own `--micronicho`/`--fecha` flags.
+
+**`Carrusel Historias/` is a deliberate placeholder, not yet automated.**
+`historias-constelaciones` is still NOT part of PACKAGING_STANDARD's
+"Applies to" list above -- Stories carry no CTA/book/hashtags by design (see
+`STORY_STRUCTURES`), so the normal primer-comentario step doesn't apply. For
+now, a Story's `PAQUETE - <hook>.docx` (image + copy + checklist only, no
+primer comentario or hashtags section -- `--primer-comentario` is optional
+in `build_paquete_docx.py` precisely for this case) can still be built by
+hand with `--tipo-pieza carrusel-historia` when a day's package includes a
+Story, but no skill does this automatically yet. The intent (not yet
+built) is to eventually redesign Stories as a carousel-adapted format
+instead of `historias-constelaciones`' current standalone shape -- until
+that redesign happens, treat any `Carrusel Historias/` package as a manual,
+one-off addition.
 
 **Fixed section order, same for all four skills:**
 
@@ -552,7 +602,11 @@ later call with the same date+slug, never recreated.
    copy's own CTA already named (that rule is unchanged, see "Closer,
    CTA, and hashtags" above) -- the primer comentario is free to point to
    the topic-correct book even when the main copy used the standing
-   *El dolor que no te pertenece* offer.
+   *El dolor que no te pertenece* offer. `--primer-comentario` is
+   technically optional in `build_paquete_docx.py` (the section is simply
+   omitted when absent), but for these four skills it is mandatory in
+   practice -- the flag only exists as an escape hatch for a manual
+   `Carrusel Historias/` package, which has no CTA to give it.
 4. **Hashtags.** Only included when the format already uses hashtags per
    its own structure rules -- `post-constelaciones` and
    `carrusel-constelaciones`: yes (pulled from the last paragraph of the
@@ -577,12 +631,15 @@ already-saved inputs (the copy/caption `.docx` this skill or a sibling
 skill already wrote, the final image path(s), and the primer-comentario
 text drafted for this specific piece) -- it never re-derives copy or
 re-decides the CTA book itself, those decisions stay with whoever is
-drafting the piece. `--micronicho "<slug>"` computes the
-`Desktop/Constelaciones - Publicaciones/<fecha> <slug>/` destination
-automatically (today's date unless `--fecha` overrides it) and is
-mandatory unless `--out-dir` is passed as an explicit one-off override. See
-that script's `--help` for exact arguments; each of the four skills' own
-`SKILL.md` documents the specific call it makes.
+drafting the piece. `--tipo-pieza <tipo>` and `--micronicho "<slug>"`
+together compute the `Desktop/Constelaciones - Publicaciones/<fecha>
+<slug>/<subcarpeta fija>/` destination automatically (today's date unless
+`--fecha` overrides it) and are both mandatory unless `--out-dir` is passed
+as an explicit one-off override. `scripts/render_reel_json2video.py`
+mirrors the same `--micronicho`/`--fecha` flags for `Paquete 4 - Reel/`
+(its own script, not `build_paquete_docx.py`, since a reel has no `.docx`
+to assemble). See each script's `--help` for exact arguments; every
+relevant skill's own `SKILL.md` documents the specific call it makes.
 
 ## Reference example (contrast-couplet device, for calibration)
 

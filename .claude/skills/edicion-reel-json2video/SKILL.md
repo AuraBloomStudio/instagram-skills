@@ -1,6 +1,6 @@
 ---
 name: edicion-reel-json2video
-description: Arma el video final de un reel de Constelaciones Familiares con la API de JSON2Video, a partir de los clips de B-roll y el orden_edicion.txt de seleccion-clips-pexels mas la narracion.mp3 de narracion-voz-gemini, ya guardados con el mismo slug del reel. Ordena las escenas segun orden_edicion.txt (un clip por momento, prefiriendo video sobre foto entre los 1-3 candidatos de cada uno), reparte la duracion total de la narracion entre los momentos en proporcion a las palabras de cada linea del guion, sube todo a JSON2Video (clips, narracion y musica de fondo opcional) porque la API solo acepta URLs publicas, genera subtitulos automaticos nativos en espanol via Whisper en Poppins, posicionados en la zona media-baja del encuadre (no pegados al fondo), en un solo color cian vivo (sin contraste entre la palabra activa y el resto de la linea), con un degradado oscuro fuerte que cubre todo el cuadro de arriba a abajo (confirmado visible incluso en el frame mas claro del video), agrega una transicion de fundido cruzado de 0.4s entre cada momento (incluido el gancho, si lo hay) en vez de cortes secos, opcionalmente arma un gancho inicial de 2s antes de que empiece la narracion (titular grande a dos fuentes -- Poppins bold amarillo/naranja de marca + Playfair Display italic dorado palido, mismos colores que los titulos de los posts estaticos -- como dos elementos `text` nativos de JSON2Video, no un elemento `html`, sobre su propio clip de fondo si seleccion-clips-pexels genero uno dedicado para el texto del gancho, o reciclando el clip de momento 1 si no), mezcla una pista de musica de fondo en volumen bajo -- la pista de marca fija por defecto en marketing/brand_music.mp3 (gitignored) si existe, o la que el usuario pase con --music como override puntual, o ninguna si no hay ni una ni la otra (no hay musica de stock integrada en JSON2Video), renderiza en vertical 9:16 (instagram-story, 1080x1920) y descarga el resultado a scripts/output_reels/<slug>/reel_final.mp4. Usar para "arma el reel final de [tema]", "edita el video con los clips y la narracion", "renderiza el reel". Not for writing the script (write it first), not for selecting B-roll clips (use seleccion-clips-pexels), and not for generating the narration audio (use narracion-voz-gemini) -- this skill only assembles what those two already produced.
+description: Arma el video final de un reel de Constelaciones Familiares con la API de JSON2Video, a partir de los clips de B-roll y el orden_edicion.txt de seleccion-clips-pexels mas la narracion.mp3 de narracion-voz-gemini, ya guardados con el mismo slug del reel. Ordena las escenas segun orden_edicion.txt (un clip por momento, prefiriendo video sobre foto entre los 1-3 candidatos de cada uno), reparte la duracion total de la narracion entre los momentos en proporcion a las palabras de cada linea del guion, sube todo a JSON2Video (clips, narracion y musica de fondo opcional) porque la API solo acepta URLs publicas, genera subtitulos automaticos nativos en espanol via Whisper en Poppins, posicionados en la zona media-baja del encuadre (no pegados al fondo), en un solo color cian vivo (sin contraste entre la palabra activa y el resto de la linea), con un degradado oscuro fuerte que cubre todo el cuadro de arriba a abajo (confirmado visible incluso en el frame mas claro del video), agrega una transicion de fundido cruzado de 0.4s entre cada momento (incluido el gancho, si lo hay) en vez de cortes secos, opcionalmente arma un gancho inicial de 2s antes de que empiece la narracion (titular grande a dos fuentes -- Poppins bold amarillo/naranja de marca + Playfair Display italic dorado palido, mismos colores que los titulos de los posts estaticos -- como dos elementos `text` nativos de JSON2Video, no un elemento `html`, sobre su propio clip de fondo si seleccion-clips-pexels genero uno dedicado para el texto del gancho, o reciclando el clip de momento 1 si no), mezcla una pista de musica de fondo en volumen bajo -- la pista de marca fija por defecto en marketing/brand_music.mp3 (gitignored) si existe, o la que el usuario pase con --music como override puntual, o ninguna si no hay ni una ni la otra (no hay musica de stock integrada en JSON2Video), renderiza en vertical 9:16 (instagram-story, 1080x1920) y descarga el resultado a Desktop/Constelaciones - Publicaciones/<fecha> <micronicho>/Paquete 4 - Reel/reel_final.mp4 (via --micronicho, per PACKAGING_STANDARD), o a scripts/output_reels/<slug>/reel_final.mp4 si se corre suelto sin ese flag. Usar para "arma el reel final de [tema]", "edita el video con los clips y la narracion", "renderiza el reel". Not for writing the script (write it first), not for selecting B-roll clips (use seleccion-clips-pexels), and not for generating the narration audio (use narracion-voz-gemini) -- this skill only assembles what those two already produced.
 ---
 
 # Edicion del reel final (JSON2Video)
@@ -264,9 +264,17 @@ carpeta por separado antes de fallar.
    guion tal cual; un titular escrito aparte para detener el scroll suele
    funcionar mejor que la linea narrada completa.
 
-4. **Ejecutar el script** por la tool de Bash, desde la raiz del repo:
+4. **Determinar el slug del micronicho para la carpeta del dia** (ver
+   `PACKAGING_STANDARD` en `constelaciones_brand_voice.md`) -- distinto del
+   `<reel_slug>` posicional, que solo nombra las carpetas de origen
+   (`output_clips`/`output_audio`). Si este reel es parte de un paquete
+   diario junto con otras piezas del mismo tema (carrusel/post/virales
+   pedidos en la misma conversacion), reusar el MISMO slug de micronicho ya
+   usado para esas piezas hermanas -- puede coincidir con `<reel_slug>` o
+   no. Si es una pieza suelta, puede coincidir con `<reel_slug>`.
+   **Ejecutar el script** por la tool de Bash, desde la raiz del repo:
    ```
-   python scripts/render_reel_json2video.py <reel_slug> [--music "ruta/al/archivo.mp3"] [--quality high] [--hook-main "FRASE PRINCIPAL" --hook-accent "frase de acento"]
+   python scripts/render_reel_json2video.py <reel_slug> [--music "ruta/al/archivo.mp3"] [--quality high] [--hook-main "FRASE PRINCIPAL" --hook-accent "frase de acento"] --micronicho "<slug de micronicho>"
    ```
    El script:
    - Carga `JSON2VIDEO_API_KEY` de `.env` (si falta, la pide de forma
@@ -290,8 +298,12 @@ carpeta por separado antes de fallar.
      musica opcional + subtitulos nativos posicionados en la zona segura
      como elementos a nivel de pelicula, resolucion `instagram-story` =
      1080x1920), lo envia y hace poll cada ~7s hasta que termina.
-   - Descarga el resultado final a
-     `scripts/output_reels/<reel_slug>/reel_final.mp4`.
+   - Descarga el resultado final a `Desktop/Constelaciones -
+     Publicaciones/<fecha de hoy> <slug de micronicho>/Paquete 4 -
+     Reel/reel_final.mp4` (gracias a `--micronicho` en el paso 4) -- ya NO
+     en `scripts/output_reels/<reel_slug>/`, que era la ubicacion antes de
+     esta convencion (sigue siendo el default si se corre el script sin
+     `--micronicho`, ej. para pruebas sueltas).
    - Borra los assets subidos a JSON2Video (narracion, clips, musica) al
      terminar, exito o error, para no agotar el storage gratuito de la
      cuenta.
@@ -327,9 +339,12 @@ carpeta por separado antes de fallar.
 - Musica de fondo nunca bloquea el render, sea la pista de marca por defecto
   o una pasada con `--music` -- si ninguna existe, el reel se renderiza
   igual, solo con narracion y subtitulos (ver seccion de arriba).
-- El archivo final siempre es `.mp4` en
-  `scripts/output_reels/<reel_slug>/reel_final.mp4` -- no cambiar el nombre
-  ni la extension sin que el usuario lo pida explicitamente.
+- El archivo final siempre se llama `reel_final.mp4` -- no cambiar el
+  nombre ni la extension sin que el usuario lo pida explicitamente. La
+  carpeta es siempre `Desktop/Constelaciones - Publicaciones/<fecha> <slug
+  de micronicho>/Paquete 4 - Reel/` (paso 4, via `--micronicho`) salvo que
+  el reel se corra suelto sin ese flag, en cuyo caso cae al viejo default
+  `scripts/output_reels/<reel_slug>/`.
 - Siempre mostrar al usuario las advertencias heredadas de
   `orden_edicion.txt` en el resumen final -- nunca ocultarlas solo porque el
   render en si haya salido bien.
@@ -345,7 +360,8 @@ carpeta por separado antes de fallar.
   Acepta `--music`, `--quality` (`low`/`medium`/`high`, default `high` -- la
   calidad no cambia el costo en creditos, solo la fidelidad visual),
   `--hook-main`/`--hook-accent` (opcionales, van juntos), `--clips-dir`,
-  `--audio-dir` y `--out-dir` para override. Constantes ajustables sin tocar
+  `--audio-dir`, `--micronicho`/`--fecha` (carpeta del dia, ver paso 4) y
+  `--out-dir` para override puntual. Constantes ajustables sin tocar
   la logica: `SUBTITLE_X`/`SUBTITLE_Y`, `GRADIENT_HTML_TEMPLATE`,
   `TRANSITION_STYLE`, `TRANSITION_DURATION_S` (ver limite duro arriba),
   `HOOK_DURATION_S`, `HOOK_MAIN_FONT`/`HOOK_ACCENT_FONT` y sus tamanos/
@@ -359,8 +375,10 @@ carpeta por separado antes de fallar.
   (gitignored, de `seleccion-clips-pexels`).
 - `scripts/output_audio/` -- narracion por reel (gitignored, de
   `narracion-voz-gemini`).
-- `scripts/output_reels/` -- reels finales renderizados (gitignored, son
-  binarios, no se suben al repo).
+- `scripts/output_reels/` -- fallback solo cuando se corre el script sin
+  `--micronicho` (gitignored, son binarios, no se suben al repo). El destino
+  normal (paso 4) es `Desktop/Constelaciones - Publicaciones/<fecha> <slug
+  de micronicho>/Paquete 4 - Reel/`.
 - `../../scripts/references/image_prompt_style.md` -- `BRAND_COLORS`, la
   paleta general de marca (ya no la fuente de los colores del gancho/
   subtitulos, ver siguiente).

@@ -74,12 +74,13 @@ estructura `FACEBOOK_POST_STRUCTURE`), para carruseles
    kebab-case que ya usan `carrusel-constelaciones`/
    `seleccion-clips-pexels`). Luego correr, por cada pieza:
    ```
-   python scripts/build_paquete_docx.py "<hook o tema>" --copy-docx "<ruta al .docx del paso 5>" --primer-comentario "<texto del primer comentario>" --micronicho "<slug>"
+   python scripts/build_paquete_docx.py "<hook o tema>" --copy-docx "<ruta al .docx del paso 5>" --primer-comentario "<texto del primer comentario>" --tipo-pieza texto-reflexivo --micronicho "<slug>"
    ```
    Sin `--image` -- esta pieza nunca lleva imagen. Esto genera
-   `Desktop/Constelaciones - Publicaciones/<fecha de hoy> <slug>/PAQUETE -
-   <hook>.docx` -- ya NO en la subcarpeta `Virales/` (esa sigue existiendo
-   solo para el `.docx` del paso 5, que no se toca). No reemplaza el
+   `Desktop/Constelaciones - Publicaciones/<fecha de hoy> <slug>/Paquete 3 -
+   Texto Reflexivo/PAQUETE - <hook>.docx` -- ya NO en la subcarpeta
+   `Virales/` (esa sigue existiendo solo para el `.docx` del paso 5, que no
+   se toca). No reemplaza el
    `.docx` del paso 5, lo complementa. Mostrar la(s) ruta(s) final(es)
    junto con el resto del resultado.
 

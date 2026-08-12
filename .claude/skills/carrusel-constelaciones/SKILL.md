@@ -243,15 +243,16 @@ se deriva del tema/hook al principio del flujo, mismo criterio que
     MISMO slug de micronicho ya usado para esas piezas hermanas. Si es una
     pieza suelta, puede coincidir con el `<slug>` del paso 1. Luego correr:
     ```
-    python scripts/build_paquete_docx.py "<hook>" --copy-docx "<ruta a la Caption.docx del paso 10>" --image "<ruta slide 1>" --image "<ruta slide 2>" ... --image "<ruta última slide>" --primer-comentario "<texto del primer comentario>" --micronicho "<slug de micronicho>"
+    python scripts/build_paquete_docx.py "<hook>" --copy-docx "<ruta a la Caption.docx del paso 10>" --image "<ruta slide 1>" --image "<ruta slide 2>" ... --image "<ruta última slide>" --primer-comentario "<texto del primer comentario>" --tipo-pieza carrusel --micronicho "<slug de micronicho>"
     ```
     `--image` se repite una vez por slide, en el mismo orden de publicación
     (hook primero, CTA al final) -- nunca la caption, que no tiene imagen
     propia. Esto genera
     `Desktop/Constelaciones - Publicaciones/<fecha de hoy> <slug de
-    micronicho>/PAQUETE - <hook>.docx` -- no reemplaza los `.docx` de
-    slide/caption del paso 10 ni las imágenes del paso 14 (esos siguen
-    guardándose donde siempre, en `Desktop/Posts Constelaciones/` y
+    micronicho>/Paquete 2 - Carrusel/Carrusel Publicación/PAQUETE -
+    <hook>.docx` -- no reemplaza los `.docx` de slide/caption del paso 10 ni
+    las imágenes del paso 14 (esos siguen guardándose donde siempre, en
+    `Desktop/Posts Constelaciones/` y
     `Desktop/Imagenes Posts/<slug>/`), los complementa. Mostrar la ruta
     final al usuario junto con el resto del resultado.
 
@@ -341,8 +342,9 @@ se deriva del tema/hook al principio del flujo, mismo criterio que
   binarios, no se suben al repo).
 - `Desktop/Imagenes Posts/<slug>/` — imágenes finales de este carrusel, en su
   propia subcarpeta.
-- `Desktop/Constelaciones - Publicaciones/<fecha> <slug de micronicho>/PAQUETE
-  - <hook>.docx` — el paquete consolidado del paso 16.
+- `Desktop/Constelaciones - Publicaciones/<fecha> <slug de micronicho>/Paquete
+  2 - Carrusel/Carrusel Publicación/PAQUETE - <hook>.docx` — el paquete
+  consolidado del paso 16.
 
 ## Related skills
 
