@@ -241,6 +241,28 @@ def _download_font(url: str, dest: Path) -> Path:
     return dest
 
 
+def _break_long_word(
+    draw: "ImageDraw.ImageDraw", word: str, font: "ImageFont.FreeTypeFont", max_width: int
+) -> list:
+    """Character-level emergency break for a single word wider than
+    max_width on its own (long compound noun, URL) -- the word-level loop in
+    _wrap_text can never split these, since a lone word is always appended
+    as its own line unconditionally, which would push it past the
+    horizontal safety margin and off the canvas on both sides."""
+    chunks = []
+    current = ""
+    for ch in word:
+        candidate = current + ch
+        if current and draw.textlength(candidate, font=font) > max_width:
+            chunks.append(current)
+            current = ch
+        else:
+            current = candidate
+    if current:
+        chunks.append(current)
+    return chunks
+
+
 def _wrap_text(draw: "ImageDraw.ImageDraw", text: str, font: "ImageFont.FreeTypeFont", max_width: int) -> list:
     words = text.split()
     if not words:
@@ -255,7 +277,14 @@ def _wrap_text(draw: "ImageDraw.ImageDraw", text: str, font: "ImageFont.FreeType
             lines.append(current)
             current = word
     lines.append(current)
-    return lines
+
+    wrapped = []
+    for line in lines:
+        if draw.textlength(line, font=font) <= max_width:
+            wrapped.append(line)
+        else:
+            wrapped.extend(_break_long_word(draw, line, font, max_width))
+    return wrapped
 
 
 def _zone_pixel_bounds(

@@ -129,6 +129,54 @@ names a structure, use that one instead and don't touch the rotation state.
    largo, tono de declaración. El más corto de las 5. Cierre: Para asentar
    (breve) + CTA + hashtags.
 
+## FACEBOOK_POST_STRUCTURE
+
+Facebook posts are a separate format from the Instagram `POST_STRUCTURES`
+rotation above -- extracted from analyzing the 10 highest-performing
+Facebook posts, all of which converged on the same shape. Unlike Instagram
+(5 rotating structures), Facebook uses **one single structure, no rotation,
+no short-verse variant**: Estilo A, párrafo largo / ensayo reflexivo.
+
+**Pattern (fixed order, every Facebook post):**
+
+1. **Título en MAYÚSCULAS** -- una afirmación provocadora o una pregunta
+   directa, nunca las dos combinadas.
+2. **3-5 párrafos de desarrollo** que construyen hacia un reencuadre
+   sistémico explícito (el mismo movimiento intelectual del "Voice
+   fingerprint": nombrar la causa oculta detrás del síntoma visible, pero
+   dicho sin rodeos, como una explicación, no solo insinuado).
+3. **Cierre "Para asentar"** con una afirmación en primera persona **entre
+   comillas** -- distinto del cierre de `post-constelaciones`/
+   `carrusel-constelaciones`, que no usa comillas.
+4. **CTA al libro correcto según el tema** (ver mapeo abajo) -- nunca el
+   libro por defecto si el tema del post apunta claramente a otro.
+5. **4-5 hashtags**: 2-3 genéricos de marca + 2-3 específicos del tema
+   (distinto del esquema fijo 2+3 de Instagram; aquí el conteo total varía
+   entre 4 y 5).
+6. **Extensión del cuerpo del post: aproximadamente 1,500-2,200 caracteres.**
+
+**No signature.** Never close with "por Diana Barreto" or any attribution
+line -- the 10 reference posts never use one.
+
+**No "comenta la palabra X" mechanic.** Do not ask readers to comment a
+specific trigger word to unlock something. Instead invite open opinion in
+the comments, then move straight into the book CTA -- e.g. "¿Qué opinan? Los
+leo en los comentarios." followed by the CTA sentence for the mapped book.
+
+**Book CTA mapping (by ecosystem/theme) -- Facebook only:**
+
+| Tema / ecosistema del post | Libro del CTA |
+|---|---|
+| Dolor | *El dolor que no te pertenece* |
+| Dinero | *El dinero y el lugar que ocupas* |
+| Mamá | *Sanando con Mamá* |
+| Papá | *Sanando con Papá* |
+| Regreso | *El Regreso* |
+
+If a post's theme doesn't map cleanly to one of these five, default to *El
+dolor que no te pertenece* (the standing offer, same fallback logic as the
+Instagram CTA rule above) unless the user says otherwise for that post.
+
 ## CAROUSEL_STRUCTURES
 
 `carrusel-constelaciones` rotates through these, avoiding the last 2 used
