@@ -70,14 +70,22 @@ skip "Para asentar," the book CTA, and hashtags entirely; see
   it. Applies to both `post-constelaciones` (right before the link) and
   `carrusel-constelaciones` (the text of the dedicated CTA slide, see
   `CAROUSEL_STRUCTURES`).
-- **CTA:** one natural mention of the book *El dolor que no te pertenece*
-  plus the plain URL `https://eldolorquenotepertenece.com` — no UTM
-  parameters, no shortened link, no more than this one link.
+- **CTA:** one natural mention of the book *El dolor que no te pertenece*.
+  The plain URL `https://eldolorquenotepertenece.com` — no UTM parameters, no
+  shortened link, no more than this one link — goes **only in the caption**,
+  never inside any slide's on-image text. Instagram doesn't make text inside
+  an image clickable, so a link baked onto a slide is dead text, not a real
+  CTA.
   - `post-constelaciones`: CTA + link go at the end of the on-image copy
-    block, right after "Para asentar" and the bridge sentence.
+    block, right after "Para asentar" and the bridge sentence (this is a
+    caption-only post, so the "on-image copy block" IS the caption -- the
+    link belongs there same as always).
   - `carrusel-constelaciones`: the CTA (bridge sentence + book mention) is
-    the on-image text of the **last slide**; the plain link itself still goes
-    **only in the caption**, never on a slide.
+    the on-image text of the **last slide** -- but since that slide's link
+    can't be clicked, its copy must say explicitly where the link actually
+    is (e.g. "el link está en la descripción" / "link en la descripción"),
+    never just trail off after naming the book as if the link were right
+    there. The link itself still goes only in the caption.
   - If a post is about a topic the book doesn't directly cover, keep the
     same CTA anyway (it's the standing offer across this brand) unless the
     user says otherwise for that post.
@@ -154,33 +162,34 @@ Do this for every transition, including into "Para asentar" and into the CTA
 slide -- the affirmation should echo a word or image from the body, and the
 CTA should pick up from what "Para asentar" just resolved.
 
-**Design mix (fixed, not random):** only the last slide (CTA) uses the
-flat-color "quote card" treatment from `BRAND_COLORS` in
-`image_prompt_style.md` -- no photo, text is the whole design. **Every other
-slide, including the hook and "Para asentar," carries a real Pexels photo**
-background (see "Photo sourcing: Pexels, not Gemini" below) -- the hook
-stopped being a bare quote card because it's the single most important slide
-for stopping the scroll. This mix repeats on every carousel; it is not
-optional or randomized per slide. Baked text per slide type (all via
+**Design mix (fixed, not random):** every slide, including the CTA, carries
+a real Pexels photo background (see "Photo sourcing: Pexels, not Gemini"
+below) -- no slide uses the flat-color "quote card" treatment from
+`BRAND_COLORS` in `image_prompt_style.md` anymore. The CTA was the last
+holdout (a real carousel test showed a plain color card reads as a weaker,
+disconnected closer next to five photo slides sharing one protagonist); now
+every slide, hook through CTA, shows the same protagonist/setting coherence
+front to back. This mix repeats on every carousel; it is not optional or
+randomized per slide. Baked text per slide type (all via
 `generate_post_image.py`'s `render_headline`, Poppins Bold `#F2A900` title +
 Playfair Display italic `#FAE8A8` subtitle on every slide that has one):
 - **Hook (slide 1):** título + subtítulo + a third short line
   (`--headline-extra`, Poppins SemiBold, same pale gold as the subtitle).
-- **Content slides + "Para asentar"** (every slide between the hook and the
-  CTA): título + subtítulo, PLUS the slide's full microdolor paragraph baked
+- **Content slides, "Para asentar," and the CTA** (every slide after the
+  hook): título + subtítulo, PLUS that slide's full paragraph baked
   separately as `--body-text` -- Poppins Bold, cyan `#22D3EE` (same color as
   the reel narration subtitles), with a dark gradient scrim behind it for
   contrast (same stops as `render_reel_json2video.py`'s
   `GRADIENT_HTML_TEMPLATE`). This is new text on the image, not just a
   distilled headline -- the reader should be able to read the actual
-  microdolor without opening the caption.
-- **CTA (slide 6, flat-color):** título + subtítulo only, no cyan block --
-  the bridge already gets its own longer, higher-weight text per the
-  strengthened bridge rule above; a third text block there would compete
-  with it.
+  microdolor (or, for the CTA, the full bridge) without opening the caption.
+  The CTA's `--body-text` is the bridge paragraph itself (see the CTA rule
+  above) -- never the hook's `--headline-extra` treatment, and never a bare
+  título/subtítulo with no paragraph.
 
-**Photo sourcing: Pexels, not Gemini.** Every photo slide (hook + content +
-Para asentar) is a real stock photo from Pexels, sourced with the exact same
+**Photo sourcing: Pexels, not Gemini.** Every slide (hook + content + Para
+asentar + CTA -- the whole carousel, no exceptions) is a real stock photo
+from Pexels, sourced with the exact same
 protagonist-consistency cascade `seleccion-clips-pexels` already uses for
 reels (solo -> accompanied -> cutaway -> different author -> approximate),
 reused by import in `scripts/search_pexels_photo.py` rather than
@@ -235,29 +244,28 @@ on any post about any topic is a defect, not a stylistic minimum.
    (hook, foto). Slide 2 explica la causa/origen oculto (foto + body-text).
    Slide 3 muestra cómo se manifiesta en el día a día (foto + body-text).
    Slide 4 nombra la consecuencia de no verlo (foto + body-text). Slide 5 es
-   "Para asentar" (foto + body-text). Slide 6 es el CTA (sin foto,
-   flat-color).
+   "Para asentar" (foto + body-text). Slide 6 es el CTA (foto + body-text).
 2. **Lista de comportamientos en paralelo.** 6-8 slides depending on how many
    behaviors fit the topic: hook (foto) + 3-5 behavior slides (foto +
-   body-text) + "Para asentar" (foto + body-text) + CTA (sin foto,
-   flat-color). Mínimo 3 comportamientos para llegar a 6 slides.
+   body-text) + "Para asentar" (foto + body-text) + CTA (foto + body-text).
+   Mínimo 3 comportamientos para llegar a 6 slides.
 3. **Antes / Después.** 6 slides, siempre (ya no hay variante corta): el
    contraste se desarrolla en dos beats por lado en vez de uno. Slide 1 =
    "Antes" -- cómo se ve/siente el patrón viejo (hook, foto). Slide 2 =
    "Antes" -- una consecuencia concreta de ese patrón (foto + body-text).
    Slide 3 = "Después" -- qué cambia al soltarlo (foto + body-text). Slide 4
    = "Después" -- qué se gana (foto + body-text). Slide 5 = "Para asentar"
-   (foto + body-text). Slide 6 = CTA (sin foto, flat-color).
+   (foto + body-text). Slide 6 = CTA (foto + body-text).
 4. **Preguntas de autodiagnóstico.** 6-8 slides depending on how many signs
    fit: hook (foto) + 3-5 self-check question slides (foto + body-text) +
-   "Para asentar" (foto + body-text) + CTA (sin foto, flat-color). Mínimo 3
+   "Para asentar" (foto + body-text) + CTA (foto + body-text). Mínimo 3
    preguntas para llegar a 6 slides.
 5. **Mini-historia con giro: situación → tensión → punto de quiebre →
    revelación → Para asentar → CTA.** 6 slides, siempre. Slide 1 sets the
    situation (hook, foto). Slide 2 the tension building up (foto +
    body-text). Slide 3 the specific breaking point/momento crítico (foto +
    body-text). Slide 4 the revelation/reframe (foto + body-text). Slide 5 is
-   "Para asentar" (foto + body-text). Slide 6 is CTA (sin foto, flat-color).
+   "Para asentar" (foto + body-text). Slide 6 is CTA (foto + body-text).
 
 ## STORY_STRUCTURES
 
