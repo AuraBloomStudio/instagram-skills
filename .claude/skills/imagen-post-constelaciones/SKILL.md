@@ -1,6 +1,6 @@
 ---
 name: imagen-post-constelaciones
-description: Generate the cover/background photo for an approved Constelaciones Familiares Instagram/Facebook post copy (.docx or .txt file from "Posts Constelaciones"). Reads the copy, has Gemini analyze its central emotion and theme, builds an image prompt following the house visual style in scripts/references/image_prompt_style.md (warm cinematic color, real people in everyday domestic scenes, no literal metaphor objects, rotated composition/setting/camera-angle so consecutive posts don't repeat the same framing, no on-image text, 4:5 vertical), generates the image via Gemini Flash Image, and saves it to Desktop/Imagenes Posts using the same filename as the copy, then builds one consolidated "PAQUETE - <nombre>.docx" (that image + the existing copy + a new first-comment CTA + its hashtags if any + a publish checklist, per PACKAGING_STANDARD) via scripts/build_paquete_docx.py. Runs scripts/generate_post_image.py internally via Bash -- never asks the user to type the python command or paste the API key. Use when asked to generate/make the cover image, background photo, or "foto de portada" for a post or copy file. Not for writing the caption itself, and not for adding title text to the image (done by hand in Canva afterward, following the fixed typography spec in scripts/references/canva_title_style.md). No brand signature/attribution is ever added to any post.
+description: Generate the cover/background photo for an approved Constelaciones Familiares Instagram/Facebook post copy (.docx or .txt file from "Posts Constelaciones"). Reads the copy, has Gemini analyze its central emotion and theme, builds an image prompt following the house visual style in scripts/references/image_prompt_style.md (warm cinematic color, real people in everyday domestic scenes, no literal metaphor objects, rotated composition/setting/camera-angle so consecutive posts don't repeat the same framing, 4:5 vertical), generates the image via Gemini Flash Image with ONLY título+subtítulo baked directly onto it (never the CTA, which stays in the caption text only), and saves it to Desktop/Imagenes Posts using the same filename as the copy, then builds one consolidated "PAQUETE - <nombre>.docx" (that image + the existing copy + a new first-comment CTA + its hashtags if any + a publish checklist, per PACKAGING_STANDARD) via scripts/build_paquete_docx.py. Runs scripts/generate_post_image.py internally via Bash -- never asks the user to type the python command or paste the API key. Use when asked to generate/make the cover image, background photo, or "foto de portada" for a post or copy file. Not for writing the caption itself. No brand signature/attribution is ever added to any post.
 ---
 
 # Imagen de Portada — Constelaciones Familiares
@@ -18,9 +18,7 @@ el chat.
 - "genera el fondo para [nombre del copy]"
 - Cualquier variante que pida la imagen/foto/portada de un copy ya escrito.
 
-No se activa para: escribir o editar el copy en sí, ni para agregar título
-sobre la imagen (eso se hace después a mano en Canva, siguiendo
-`../../scripts/references/canva_title_style.md`). Nunca se agrega firma de
+No se activa para escribir o editar el copy en sí. Nunca se agrega firma de
 marca (nombre de autor, @handle) a ningún post -- se eliminó por completo.
 
 ## Flujo
@@ -30,26 +28,42 @@ marca (nombre de autor, @handle) a ningún post -- se eliminó por completo.
    si no es exacto). Si hay más de una coincidencia o ninguna, listar
    opciones y preguntar antes de continuar. Si el usuario ya da una ruta
    completa, usarla tal cual.
-2. **Ejecutar el script.** Desde la raíz del repo:
+2. **Leer el copy y derivar título/subtítulo para quemar en la imagen**
+   (ver `BAKED_TYPOGRAPHY` en `../../scripts/references/canva_title_style.md`):
+   título = el primer párrafo en negrita del `.docx`; subtítulo = la línea de
+   "Para asentar", si la tiene esa estructura (omitir si no). **Nunca CTA en
+   la imagen** -- regla dura, distinta del carrusel (ver "Paquete 1" en
+   `constelaciones_brand_voice.md`); el CTA completo del copy se queda
+   únicamente en el caption de texto.
+3. **Ejecutar el script.** Desde la raíz del repo:
    ```
-   python scripts/generate_post_image.py "<ruta al .docx o .txt>"
+   python scripts/generate_post_image.py "<ruta al .docx o .txt>" --headline-main "<título>" --headline-accent "<línea de Para asentar, si existe>"
    ```
-   vía la tool de Bash. No reimplementar el flujo a mano: el script ya hace
-   lectura del copy, análisis de emoción con Gemini, construcción del prompt
-   con rotación de composición/ubicación/ángulo de cámara, generación de
-   imagen y guardado en 4:5 (1080x1350).
-3. **API key.** `GEMINI_API_KEY` ya vive en `.env` (gitignored). No pedirla
+   vía la tool de Bash -- nunca pasar `--body-text` para esta skill. No
+   reimplementar el flujo a mano: el script ya hace lectura del copy,
+   análisis de emoción con Gemini, construcción del prompt con rotación de
+   composición/ubicación/ángulo de cámara, generación de imagen, horneado
+   del texto, y guardado en 4:5 (1080x1350).
+4. **API key.** `GEMINI_API_KEY` ya vive en `.env` (gitignored). No pedirla
    en el chat. Si el script la pide de forma interactiva (falta en `.env`),
    avisar al usuario que debe correrla él mismo en su terminal o agregarla a
    `.env` directamente — nunca solicitarla ni pegarla en la conversación.
-4. **Mostrar el resultado.** Leer el PNG generado con la tool de Read para
-   que el usuario lo vea inline, junto con la ruta final en
-   `Desktop/Imagenes Posts/`.
-5. **Reintentos transitorios.** El script ya reintenta automáticamente
+5. **Revisión visual obligatoria, luego mostrar el resultado.** Leer el PNG
+   generado con la tool de Read y chequear que el título/subtítulo no tapen
+   la cara de la protagonista y que ninguna cabeza/rostro quede cortado de
+   forma abrupta por el borde del encuadre (regla `EDGE_CROP` en
+   `constelaciones_brand_voice.md`). El aviso automático del script es solo
+   un apoyo y tiene un punto ciego confirmado (un incidente real, 2026-08-13,
+   mostró que no detecta un mentón/mandíbula sin ojos visibles) --
+   **recortar/hacer zoom sobre cada borde del encuadre**, no solo mirar la
+   imagen completa una vez, con atención extra si el texto horneado queda
+   cerca de un borde. Si falla, regenerar antes de mostrarlo. Mostrarlo
+   inline junto con la ruta final en `Desktop/Imagenes Posts/`.
+6. **Reintentos transitorios.** El script ya reintenta automáticamente
    errores 503/429/timeout de Gemini; si aun así falla, mostrar el error tal
    cual lo imprime el script (suele traer la causa: cuota, modelo no
    disponible, etc.) en vez de reinterpretarlo.
-6. **Armar el paquete consolidado** (ver `PACKAGING_STANDARD` en
+7. **Armar el paquete consolidado** (ver `PACKAGING_STANDARD` en
    `constelaciones_brand_voice.md` para el detalle completo, incluida la
    carpeta de salida). Leer el texto del copy ya aprobado (el mismo archivo
    del paso 1) para identificar su tema y aplicar la tabla tema -> libro de
@@ -64,7 +78,7 @@ marca (nombre de autor, @handle) a ningún post -- se eliminó por completo.
    criterio kebab-case que ya usan `carrusel-constelaciones`/
    `seleccion-clips-pexels`). Luego correr:
    ```
-   python scripts/build_paquete_docx.py "<nombre del archivo sin extensión>" --copy-docx "<ruta al copy del paso 1>" --image "<ruta al PNG del paso 2>" --primer-comentario "<texto del primer comentario>" --tipo-pieza imagen-texto --micronicho "<slug>"
+   python scripts/build_paquete_docx.py "<nombre del archivo sin extensión>" --copy-docx "<ruta al copy del paso 1>" --image "<ruta al PNG del paso 3>" --primer-comentario "<texto del primer comentario>" --tipo-pieza imagen-texto --micronicho "<slug>"
    ```
    Esto genera
    `Desktop/Constelaciones - Publicaciones/<fecha de hoy> <slug>/Paquete 1 -
@@ -86,14 +100,17 @@ marca (nombre de autor, @handle) a ningún post -- se eliminó por completo.
   de estilo, edita ese archivo de referencia, no esta skill.
 - Un solo archivo de copy por invocación salvo que el usuario pida
   explícitamente correr varios en lote.
-- El título en Canva sigue siempre la tipografía fija de
-  `scripts/references/canva_title_style.md` (titular cartel amarillo/naranja
-  centrado + cierre en script dorado pálido centrado); la posición vertical
-  del bloque no es un valor fijo — se ajusta a mano según el encuadre de cada
-  foto para no tapar la cara de la protagonista. Nunca se agrega firma de
-  marca (nombre de autor, @handle) a ninguna imagen — eso vive en el mismo
-  archivo como regla dura, no como opción.
-- El paquete consolidado (paso 6) es siempre el último paso, nunca antes de
+- El título/subtítulo se hornean siempre con `generate_post_image.py` (ver
+  `BAKED_TYPOGRAPHY` en `scripts/references/canva_title_style.md`) — ya no
+  es un paso manual en Canva. **La imagen NUNCA lleva el CTA horneado** —
+  regla dura, distinta del carrusel; el CTA completo se queda solo en el
+  copy/caption de texto. Nunca se agrega firma de marca (nombre de autor,
+  @handle) a ninguna imagen.
+- Ninguna imagen se muestra al usuario sin pasar por la revisión visual del
+  paso 5 (cara no tapada + sin cabeza/rostro cortado por el borde, regla
+  `EDGE_CROP` en `constelaciones_brand_voice.md`) — el aviso automático del
+  script es solo un apoyo, nunca sustituye mirar la imagen.
+- El paquete consolidado (paso 7) es siempre el último paso, nunca antes de
   que exista el PNG generado. El texto del primer comentario es nuevo
   (nunca copiar el CTA del copy tal cual) y su libro se decide con la tabla
   tema -> libro aplicada al contenido real del copy leído, no un libro fijo
@@ -101,12 +118,14 @@ marca (nombre de autor, @handle) a ningún post -- se eliminó por completo.
 
 ## Recursos
 
-- `scripts/generate_post_image.py` — el script que hace todo el trabajo.
-- `scripts/build_paquete_docx.py` — arma el paquete consolidado del paso 6.
+- `scripts/generate_post_image.py` — el script que genera la imagen y
+  hornea el título/subtítulo/CTA.
+- `scripts/build_paquete_docx.py` — arma el paquete consolidado del paso 7.
 - `scripts/references/image_prompt_style.md` — reglas de estilo visual,
   editable sin tocar código.
-- `scripts/references/canva_title_style.md` — tipografía y color del título
-  para el paso manual en Canva, y la regla de que no se agrega firma.
+- `scripts/references/canva_title_style.md` — sección `BAKED_TYPOGRAPHY`:
+  mapeo exacto título/subtítulo/CTA y colores, y la regla de que no se
+  agrega firma.
 - `scripts/references/constelaciones_brand_voice.md` — `FACEBOOK_POST_STRUCTURE`
   (tabla tema -> libro) y `PACKAGING_STANDARD` (el paquete consolidado del
   paso 6).

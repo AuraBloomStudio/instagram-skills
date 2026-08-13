@@ -98,6 +98,55 @@ skip "Para asentar," the book CTA, and hashtags entirely; see
   - Placement: `post-constelaciones` -> end of the on-image copy block.
     `carrusel-constelaciones` -> end of the caption, after the CTA link.
 
+## EDGE_CROP (composition rule, applies to every skill that selects or generates a photo)
+
+**Never select or ship a photo where a person's head, face, or upper body is
+abruptly cut off by a frame edge** (e.g. a head cropped mid-forehead, a chin
+cut right at the top edge). This applies to every source: `search_pexels_photo.py`
+(`carrusel-constelaciones`), `search_pexels_clips.py` (`seleccion-clips-pexels`),
+and Gemini-generated photos (`post-constelaciones`, `imagen-post-constelaciones`,
+`historias-constelaciones`). It is a composition/quality rule, completely
+independent of the face-privacy rule (whether a face is *allowed* to be
+identifiable or must stay hidden/turned away/backlit) -- a photo can pass the
+privacy rule and still fail this one, and vice versa.
+
+**What's still valid:** medium shots, hands, shoulders, backs, and a
+deliberate full "framed from the shoulders/collarbone down" composition where
+the head is entirely and cleanly outside the frame (see `CAMERA_ANGLES` option
+5 in `image_prompt_style.md`). **What fails this rule:** a head that is
+*partially* in frame and gets cut by the edge -- that reads as a cropping
+mistake, not an intentional composition choice, whether or not the visible
+part is recognizable.
+
+**Detection is manual-first, same division of labor as every other visual
+check in this pipeline** (see the documented Haar-cascade instability under
+`_zone_has_face` in `generate_post_image.py` -- the same cascade can flip
+between detecting and missing the same real face depending on a 1px crop
+change): every mandatory visual review step (`seleccion-clips-pexels/SKILL.md`,
+`carrusel-constelaciones/SKILL.md`, and the single-image skills' result step)
+must explicitly check for this, by eye, before a photo ships. `generate_post_image.py`
+also runs `detect_edge_cropped_head()`, an advisory-only frontal+profile
+Haar-cascade pass over the whole frame that prints a warning when a detected
+face's bounding box touches or nearly touches an edge -- it never blocks
+generation or rejects a photo by itself, it only flags the frame for the
+human doing the manual check.
+
+**Real incident, confirmed 2026-08-13 (read before trusting either layer):**
+"Ese Peso Que Cargas No Nació Contigo" regenerated with the "shoulders down"
+composition (`CAMERA_ANGLES` option 5), and Gemini didn't cut the crop quite
+as cleanly as the prompt asked -- a thin chin/jaw sliver ended up visible at
+the top edge. `detect_edge_cropped_head()` found zero faces and printed no
+warning (a chin alone has no eyes/nose to trigger either cascade -- a real,
+confirmed blind spot, not a wiring bug). The manual review also missed it on
+the first pass: the baked título/subtítulo text sat right over that exact
+region and visually camouflaged the sliver against a glance at the whole
+image. **The fix that actually matters: the manual check must physically
+zoom/crop into each edge of the frame at full resolution, not just look at
+the whole image once** -- especially the edge nearest wherever baked text
+sits, and with extra scrutiny whenever the "shoulders down" archetype was
+chosen (its very premise -- trusting Gemini to cut the frame exactly at the
+neckline -- has now failed a real test).
+
 ## POST_STRUCTURES
 
 `post-constelaciones` rotates through these, avoiding the last 2 used
@@ -362,6 +411,29 @@ composition/anonymity rules, which don't apply to a real licensed stock
 photo. A mandatory visual review (same discipline as `seleccion-clips-pexels`,
 adapted for stills) happens before any slide is shown to the user -- see
 `carrusel-constelaciones/SKILL.md`.
+
+**Paquete 1 (`post-constelaciones`/`imagen-post-constelaciones`) now bakes
+título+subtítulo, same typography system as this carousel's hook -- but
+NEVER a CTA, unlike this carousel.** Until 2026-08-12 these two skills left
+the title entirely for a manual Canva step (`TITLE_TYPOGRAPHY` in
+`canva_title_style.md`); they now pass `--headline-main`/`--headline-accent`
+to `generate_post_image.py` directly, so the PNG ships with título (Poppins
+Bold `#F2A900`) and subtítulo (Playfair Display italic `#FAE8A8`, typically
+the post's "Para asentar" line) already baked in -- no manual Canva step for
+these two anymore. Placement always uses the normal OpenCV face veto (never
+`--force-center-zone`, which stays this carousel's hook-only exception).
+
+**Hard rule, permanent (2026-08-13): Paquete 1's image NEVER carries a baked
+CTA** -- no book mention, no "el link está en la descripción" line, nothing
+via `--body-text`. This is a deliberate difference from this carousel's CTA
+slide, not an oversight: the carousel's CTA gets its own dedicated slide with
+nothing else competing for attention, while a single-image post only has one
+frame total, and título+subtítulo+CTA together read as cluttered and compete
+with the título for attention (confirmed against a real render before this
+rule was set). The full CTA (book + link) keeps living exclusively in the
+copy/caption `.docx`, unchanged -- baking título/subtítulo never touches that.
+`historias-constelaciones` is unaffected and stays fully manual -- see
+`canva_title_style.md`.
 
 **First content slide carries the strongest pain (mandatory).** Slide 2 (the
 first slide after the hook) is the first real swipe -- if it doesn't land

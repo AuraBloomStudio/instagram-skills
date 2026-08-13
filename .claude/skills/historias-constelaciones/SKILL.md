@@ -47,9 +47,16 @@ No se activa para posts de feed (`post-constelaciones`) ni carruseles
    rotación de composición/ubicación/ángulo y el mismo estilo visual
    (personas reales, escenas cotidianas, sin objetos literales) que las otras
    dos skills — solo cambia el formato de salida.
-7. **Mostrar el resultado**: la imagen 9:16 generada (tool de Read) + la ruta
-   final, y el recordatorio de que el texto se agrega después a mano en
-   Canva siguiendo la tipografía fija de
+7. **Revisión visual obligatoria, luego mostrar el resultado**: antes de
+   mostrarla, chequear que ninguna cabeza/rostro quede cortado de forma
+   abrupta por el borde del encuadre (regla `EDGE_CROP` en
+   `constelaciones_brand_voice.md`). El aviso automático del script es solo
+   un apoyo con un punto ciego confirmado (un incidente real, 2026-08-13, no
+   detectó un mentón sin ojos visibles) -- **recortar/hacer zoom sobre cada
+   borde del encuadre**, no solo mirar la imagen completa una vez. Si falla,
+   regenerar. Luego mostrar la
+   imagen 9:16 (tool de Read) + la ruta final, y el recordatorio de que el
+   texto se agrega después a mano en Canva siguiendo la tipografía fija de
    `scripts/references/canva_title_style.md` (titular cartel amarillo/naranja
    centrado + cierre en script dorado pálido centrado, con la posición
    vertical del bloque ajustada a mano según el encuadre de esta foto para no

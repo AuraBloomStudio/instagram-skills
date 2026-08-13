@@ -1,10 +1,12 @@
 # Canva title typography — Constelaciones Familiares
 
-Canonical spec for the title text added by hand in Canva on top of the
-background photos this repo generates (feed posts, carousel slides, stories).
-Cited by `imagen-post-constelaciones`, `post-constelaciones`,
-`carrusel-constelaciones`, and `historias-constelaciones`. Edit this file to
-change the spec — don't duplicate its content inside any `SKILL.md`.
+Canonical spec for the title text on top of the background photos this repo
+generates (feed posts, carousel slides, stories). `carrusel-constelaciones`,
+`post-constelaciones`, and `imagen-post-constelaciones` bake this
+automatically via `generate_post_image.py` (see `BAKED_TYPOGRAPHY` below);
+`historias-constelaciones` is the only one still added by hand in Canva (see
+`TITLE_TYPOGRAPHY` below). Edit this file to change the spec — don't
+duplicate its content inside any `SKILL.md`.
 
 This file governs on-image TEXT typography only. Background photo style
 (palette, composition, face rules) lives in `image_prompt_style.md` and is
@@ -19,7 +21,7 @@ unaffected by this file.
   carry over and nothing replaces it. The image carries title text only — no
   footer/corner attribution of any kind.
 
-## TITLE_TYPOGRAPHY (verbatim spec, approved 2026-08-10)
+## TITLE_TYPOGRAPHY (verbatim spec, approved 2026-08-10 -- `historias-constelaciones` only)
 
 - **Main headline** (the punch phrase / hook text): bold, condensed
   sans-serif, poster/impact style (Anton or Oswald Bold, or an equivalent
@@ -44,15 +46,18 @@ unaffected by this file.
   it never overlaps the protagonist's face or hair — do not paste the same
   pixel offset onto every post without checking.
 
-## CARROUSEL_BAKED_TYPOGRAPHY (carrusel-constelaciones only, automated, no Canva step)
+## BAKED_TYPOGRAPHY (carrusel-constelaciones, post-constelaciones, imagen-post-constelaciones -- automated, no Canva step)
 
-`carrusel-constelaciones` no longer uses the manual `TITLE_TYPOGRAPHY` spec
-above at all -- every slide's text is baked automatically with Pillow via
+None of these three use the manual `TITLE_TYPOGRAPHY` spec above -- every
+slide/photo's text is baked automatically with Pillow via
 `generate_post_image.py`'s `render_headline` (see that script and
 `constelaciones_brand_voice.md`'s "Design mix" rule). Its typography is
-deliberately **Poppins**, not Anton/Oswald, so carousels and reels
-(`render_reel_json2video.py`'s hook text) read as one brand system instead of
-two different ones:
+deliberately **Poppins**, not Anton/Oswald, so carousels, single-image posts,
+and reels (`render_reel_json2video.py`'s hook text) all read as one brand
+system instead of separate ones. `post-constelaciones`/`imagen-post-constelaciones`
+adopted this same system after starting out fully manual (like
+`historias-constelaciones` still is) -- see "Paquete 1" below for their exact
+mapping.
 
 - **Título + subtítulo -- hook (slide 1) ONLY.** Título: Poppins Bold,
   `#F2A900`, same color as the manual spec above but a different font
@@ -88,6 +93,26 @@ two different ones:
   full paragraph needs more room than a short headline. These slides never
   use the hook's forced-center exception.
 
+**Paquete 1 (`post-constelaciones`/`imagen-post-constelaciones`), one image,
+título + subtítulo ONLY, never a CTA (updated 2026-08-13):**
+- **Título:** the post's own bold first paragraph (`--headline-main`) --
+  same Poppins Bold `#F2A900` as the carousel hook.
+- **Subtítulo:** the post's "Para asentar" line, when the structure has one
+  (`--headline-accent`) -- same Playfair Display italic `#FAE8A8` as the
+  carousel hook and the manual `TITLE_TYPOGRAPHY` closing line. If the
+  structure has no "Para asentar"-equivalent line, omit `--headline-accent`
+  rather than inventing one.
+- **No CTA, ever, on this image -- hard rule, reversed from the initial
+  2026-08-12 baking design.** `--body-text` is never passed for these two
+  skills. A single image carrying título + subtítulo + any CTA line (even a
+  short one) still read as competing with the título and cluttering the
+  frame in practice; the carousel's CTA slide gets to carry one because it's
+  a slide dedicated to nothing else, which a single-image post never has.
+  The full CTA (book + link) keeps living exclusively in the copy/caption
+  `.docx` -- unchanged, was never removed from there.
+- **Placement:** always the normal OpenCV face veto -- never
+  `--force-center-zone`, which stays the carousel hook's exception alone.
+
 ## Reference render
 
 `canva_title_style_example.png` (same folder) is the approved 2026-08-10
@@ -100,5 +125,10 @@ re-deriving them from the text description above.
 
 ## Changing this spec
 
-Edit `TITLE_TYPOGRAPHY` above — no code change needed, since this is a manual
-Canva step, not something `generate_post_image.py` renders.
+Edit `TITLE_TYPOGRAPHY` above for `historias-constelaciones` — no code change
+needed, since that one is still a manual Canva step. `BAKED_TYPOGRAPHY`
+(carrusel-constelaciones, post-constelaciones, imagen-post-constelaciones) is
+rendered by `generate_post_image.py`'s `render_headline` — changing colors,
+fonts, or placement there requires editing the script's constants
+(`HEADLINE_MAIN_COLOR`, `HEADLINE_ACCENT_COLOR`, `BODY_TEXT_COLOR`, etc.), not
+just this file.

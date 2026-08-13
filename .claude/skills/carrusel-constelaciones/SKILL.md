@@ -226,6 +226,21 @@ se deriva del tema/hook al principio del flujo, mismo criterio que
       "imagen de apoyo sin rostro", confirmar que no hay ningún rostro en
       cuadro; si dice "acompañada", confirmar que la protagonista se
       distingue bien).
+    - **Cabeza/rostro cortado por el borde del encuadre** (regla `EDGE_CROP`
+      en `constelaciones_brand_voice.md`): rechazar cualquier candidata
+      donde la cabeza, el rostro, o el mentón quede cortado de forma abrupta
+      por cualquier borde (ej. cabeza a la mitad, mentón justo en el borde
+      superior) -- independiente del chequeo de rostro permitido/prohibido
+      de arriba. Un plano medio, manos, hombros, espalda, o una toma
+      deliberada "desde los hombros hacia abajo" con la cabeza enteramente
+      fuera del cuadro siguen siendo válidos; lo que falla es un corte
+      parcial que se ve como error de recorte. **Recortar/hacer zoom sobre
+      cada borde de la candidata** antes de decidir, no solo mirarla entera
+      una vez -- un incidente real (2026-08-13) mostró que un mentón sin
+      ojos visibles pasa completamente desapercibido en un vistazo general
+      (y tampoco lo detecta el aviso automático de `generate_post_image.py`,
+      que solo corre para Gemini/`--source-image`, no para esta revisión de
+      candidatas de Pexels).
     Si una candidata falla, volver a buscar solo ese slot con `--only N`
     (repitiendo la cascada completa desde "sola", nunca saltando directo a
     "protagonista distinta"). Si tras 2-3 rondas ninguna sirve, no forzar una

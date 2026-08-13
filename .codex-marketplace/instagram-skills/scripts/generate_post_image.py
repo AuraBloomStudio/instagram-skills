@@ -75,6 +75,20 @@ slide can now bake body_text alone (no gold title/subtitle block at all).
 The per-slide gold title was dropped from carrusel-constelaciones's content
 slides; only the hook keeps one.
 
+Every photo (both --source-image and Gemini-generated) is also checked with
+detect_edge_cropped_head(): an advisory-only frontal+profile Haar-cascade
+pass over the WHOLE frame that prints a warning if a detected face's
+bounding box touches or nearly touches any edge -- a likely sign the
+head/face was cut off abruptly by the crop. This never blocks generation or
+rejects anything by itself (same known Haar-cascade instability as the
+face-zone veto below) -- confirmed in a real incident (2026-08-13) where a
+chin-only sliver at the top edge, with no eyes/nose visible, triggered zero
+detections and shipped uncaught. It only flags the frame as a hint for the
+mandatory manual visual review, which must zoom into each edge rather than
+glance at the whole image, per the EDGE_CROP rule in
+constelaciones_brand_voice.md -- that manual zoom is the real backstop, not
+this function.
+
 The visual style (lighting, composition options, how metaphors get reinterpreted)
 for photography lives entirely in scripts/references/image_prompt_style.md,
 and for illustration in scripts/references/illustration_style.md -- edit
@@ -389,6 +403,61 @@ def resolve_headline_zone(
         "resultado a mano)."
     )
     return "top"
+
+
+# Fraction of the shorter image dimension a detected face's bounding box can
+# sit from any edge before it's flagged as a possible abrupt crop (head/face
+# cut by the frame border) -- see EDGE_CROP rule in constelaciones_brand_voice.md.
+EDGE_CROP_MARGIN_FRACTION = 0.04
+
+
+def detect_edge_cropped_head(image: "Image.Image") -> bool:
+    """Best-effort advisory check, not a gate: runs frontal AND profile Haar
+    cascades over the WHOLE frame (not just a text-placement band) and flags
+    any detected face whose bounding box touches or nearly touches an edge --
+    a signal the head/face was likely cut off abruptly by the crop, as
+    opposed to a deliberate shoulders-down composition with no head in frame
+    at all (that case detects zero faces here, and is correctly not
+    flagged).
+
+    KNOWN BLIND SPOT, confirmed in a real incident (2026-08-13): a chin/jaw
+    sliver with no eyes or nose visible -- exactly what a "framed from the
+    shoulders down" composition produces when Gemini doesn't cut the crop
+    quite as cleanly as the prompt asked for -- essentially never triggers
+    either cascade, because both require eye/nose-region features to fire.
+    That real photo returned zero detections here and shipped with a cropped
+    chin nobody caught until a second manual look. Adding the profile
+    cascade is a genuine incremental improvement (catches some tilted/turned
+    partial faces the frontal one misses) but does NOT close this specific
+    gap -- a chin alone still won't fire either cascade. This is why the
+    mandatory manual visual review (see the EDGE_CROP checklist item in
+    seleccion-clips-pexels/SKILL.md, carrusel-constelaciones/SKILL.md, and
+    the single-image skills) must physically zoom into each edge of the
+    frame rather than glance at the whole image -- especially when baked
+    text sits right at that edge, since text can visually camouflage a thin
+    sliver of skin the same way it did in the real incident. This function
+    only ever prints a warning; it never blocks generation or auto-rejects a
+    candidate, same division of labor as the face-zone veto above."""
+    try:
+        import cv2
+        import numpy as np
+    except ImportError:
+        return False  # advisory only -- never hard-fail generation over this
+
+    array = np.array(image.convert("L"))
+    cascade_files = ["haarcascade_frontalface_default.xml", "haarcascade_profileface.xml"]
+    faces = []
+    for cascade_file in cascade_files:
+        cascade = cv2.CascadeClassifier(cv2.data.haarcascades + cascade_file)
+        faces.extend(cascade.detectMultiScale(array, scaleFactor=1.05, minNeighbors=3))
+    if not faces:
+        return False
+
+    margin = round(min(image.width, image.height) * EDGE_CROP_MARGIN_FRACTION)
+    for (x, y, w, h) in faces:
+        if x <= margin or y <= margin or (x + w) >= image.width - margin or (y + h) >= image.height - margin:
+            return True
+    return False
 
 
 # Same alpha stops as render_reel_json2video.py's GRADIENT_HTML_TEMPLATE
@@ -1161,6 +1230,12 @@ def main() -> int:
             print(f"Usando imagen existente (sin Gemini, sin API key): {src_path.name}")
             image = Image.open(src_path).convert("RGB")
             image = cover_resize(image, output_size)
+            if detect_edge_cropped_head(image):
+                print(
+                    "  Aviso: posible cabeza/rostro cortado por el borde del "
+                    "encuadre -- revisar visualmente antes de aprobar (ver "
+                    "regla EDGE_CROP en constelaciones_brand_voice.md)."
+                )
             if args.headline_main or args.body_text:
                 band_fraction = compute_band_fraction(
                     output_size[0], output_size[1], args.headline_main,
@@ -1234,6 +1309,13 @@ def main() -> int:
         image = Image.open(BytesIO(image_bytes)).convert("RGB")
         if image.size != output_size:
             image = image.resize(output_size, Image.LANCZOS)
+
+        if detect_edge_cropped_head(image):
+            print(
+                "  Aviso: posible cabeza/rostro cortado por el borde del "
+                "encuadre -- revisar visualmente antes de aprobar (ver "
+                "regla EDGE_CROP en constelaciones_brand_voice.md)."
+            )
 
         if args.headline_main or args.body_text:
             band_fraction = compute_band_fraction(

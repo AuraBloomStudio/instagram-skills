@@ -1,6 +1,6 @@
 ---
 name: post-constelaciones
-description: Draft a single-image organic Instagram/Facebook post for Constelaciones Familiares in one of 5 structures (carta directa, contraste cree-que/en-realidad, pregunta sin resolver, confesión personal, dato-manifiesto), following the brand voice documented in scripts/references/constelaciones_brand_voice.md (tú address, "Para asentar" closer, plain-URL CTA, 2 fixed + 3 topic hashtags via ig-hashtag-strategist). On approval, saves the copy as .docx in Desktop/Posts Constelaciones, generates its background photo by running scripts/generate_post_image.py (saved to Desktop/Imagenes Posts), then builds one consolidated "PAQUETE - <hook>.docx" (image + copy + a new first-comment CTA + hashtags + a publish checklist, per PACKAGING_STANDARD) via scripts/build_paquete_docx.py, saved to Desktop/Constelaciones - Publicaciones/<fecha> <micronicho>/. Use for "hazme un post de [tema]", "necesito un post sobre [tema]". Not for carousels (use carrusel-constelaciones), not for paid ads (future ads-constelaciones), and not for generating only the image of a copy already written by hand (use imagen-post-constelaciones).
+description: Draft a single-image organic Instagram/Facebook post for Constelaciones Familiares in one of 5 structures (carta directa, contraste cree-que/en-realidad, pregunta sin resolver, confesión personal, dato-manifiesto), following the brand voice documented in scripts/references/constelaciones_brand_voice.md (tú address, "Para asentar" closer, plain-URL CTA, 2 fixed + 3 topic hashtags via ig-hashtag-strategist). On approval, saves the copy as .docx in Desktop/Posts Constelaciones, generates its background photo by running scripts/generate_post_image.py with ONLY título+subtítulo baked directly onto the image (never the CTA, which would clutter a single-image post -- the full CTA stays in the caption text only; saved to Desktop/Imagenes Posts), then builds one consolidated "PAQUETE - <hook>.docx" (image + copy + a new first-comment CTA + hashtags + a publish checklist, per PACKAGING_STANDARD) via scripts/build_paquete_docx.py, saved to Desktop/Constelaciones - Publicaciones/<fecha> <micronicho>/. Use for "hazme un post de [tema]", "necesito un post sobre [tema]". Not for carousels (use carrusel-constelaciones), not for paid ads (future ads-constelaciones), and not for generating only the image of a copy already written by hand (use imagen-post-constelaciones).
 ---
 
 # Post Constelaciones (imagen única)
@@ -46,18 +46,34 @@ a mano (`imagen-post-constelaciones`).
    `Desktop/Posts Constelaciones/<título o hook>.docx`, con el título en
    negrita en el primer párrafo (mismo formato que los posts existentes).
    Usar `python-docx` (ya es una dependencia del proyecto).
-6. **Generar la imagen de fondo**: correr
-   `python scripts/generate_post_image.py "<ruta al .docx recién guardado>"`
-   por la tool de Bash, desde la raíz del repo. No reimplementar ese flujo a
-   mano ni pedir la API key — ya vive en `.env`.
-7. **Mostrar el resultado**: leer el PNG generado (tool de Read) y mostrarlo,
-   junto con la ruta final, y el recordatorio de que el título se agrega
-   después a mano en Canva siguiendo la tipografía fija de
-   `scripts/references/canva_title_style.md` (titular cartel amarillo/naranja
-   centrado + cierre en script dorado pálido centrado, con la posición
-   vertical del bloque ajustada a mano según el encuadre de esta foto para no
-   tapar la cara) — sin ninguna firma ni atribución de marca, eliminada por
-   completo.
+6. **Generar la imagen de fondo con el texto ya quemado**: solo título y
+   subtítulo, **nunca CTA** (regla dura, distinta del carrusel -- ver
+   "Paquete 1" en `constelaciones_brand_voice.md`). Correr
+   ```
+   python scripts/generate_post_image.py "<ruta al .docx recién guardado>" --headline-main "<título>" --headline-accent "<línea de "Para asentar", si la estructura tiene una>"
+   ```
+   por la tool de Bash, desde la raíz del repo -- ver `BAKED_TYPOGRAPHY` en
+   `canva_title_style.md` para el mapeo exacto y los colores. Omitir
+   `--headline-accent` si la estructura elegida no tiene una línea de "Para
+   asentar" o reencuadre corto equivalente. Nunca pasar `--body-text` para
+   esta skill -- el CTA completo (libro + link) vive únicamente en el copy/
+   caption de texto, nunca quemado en la imagen. No reimplementar ese flujo
+   a mano ni pedir la API key — ya vive en `.env`.
+7. **Revisión visual obligatoria antes de mostrar el resultado**: leer el PNG
+   generado (tool de Read) y chequear que el título/subtítulo no tapen la
+   cara de la protagonista (el script ya corre el veto automático de OpenCV,
+   pero la revisión manual es el respaldo real) y que ninguna cabeza/rostro
+   quede cortado de forma abrupta por el borde del encuadre -- ver la regla
+   `EDGE_CROP` en `constelaciones_brand_voice.md`; el script imprime un aviso
+   de "posible cabeza cortada" cuando lo detecta, pero un chequeo que confía
+   solo en ese aviso NO alcanza -- un incidente real (2026-08-13) mostró que
+   el aviso automático no detecta un mentón/mandíbula sin ojos visibles.
+   **Recortar/hacer zoom sobre cada borde del encuadre** (no solo mirar la
+   imagen completa una vez) antes de aprobar, con atención extra cuando el
+   texto horneado quede cerca de un borde (puede camuflar visualmente una
+   franja delgada de piel, como pasó en ese incidente). Si falla cualquiera
+   de los dos chequeos, regenerar antes de mostrarlo. Mostrar el resultado
+   final junto con la ruta.
 8. **Armar el paquete consolidado** (ver `PACKAGING_STANDARD` en
    `constelaciones_brand_voice.md` para el detalle completo, incluida la
    carpeta de salida). Determinar el libro correcto para el primer
@@ -97,11 +113,19 @@ a mano (`imagen-post-constelaciones`).
 - Las reglas de voz, cierre, CTA y hashtags viven únicamente en
   `constelaciones_brand_voice.md`; el estilo visual únicamente en
   `image_prompt_style.md`. Esta skill no las duplica ni las reinterpreta.
-- El título en Canva sigue siempre la tipografía fija de
-  `canva_title_style.md`; la posición vertical del bloque no es un valor
-  fijo — se ajusta a mano según el encuadre de cada foto para no tapar la
-  cara de la protagonista. Nunca se agrega firma de marca (nombre de autor,
-  @handle) a ningún post.
+- El título/subtítulo se hornean siempre con `generate_post_image.py` (ver
+  `BAKED_TYPOGRAPHY` en `canva_title_style.md`) — ya no es un paso manual en
+  Canva para esta skill. **La imagen NUNCA lleva el CTA horneado** (ni la
+  mención al libro ni "el link está en la descripción") — regla dura,
+  distinta del carrusel, donde el CTA sí va horneado en su propia slide
+  dedicada; en un post de una sola imagen, el CTA satura y compite con el
+  título. El CTA completo sigue existiendo, pero solo en el copy/caption de
+  texto. Nunca se agrega firma de marca (nombre de autor, @handle) a ningún
+  post.
+- Ninguna imagen se muestra al usuario sin pasar por la revisión visual del
+  paso 7 (cara no tapada + sin cabeza/rostro cortado por el borde, regla
+  `EDGE_CROP`) — el aviso automático de `generate_post_image.py` es solo un
+  apoyo, nunca sustituye mirar la imagen.
 - El paquete consolidado (paso 8) es siempre el último paso, nunca antes de
   que exista el `.docx` del copy y el PNG de la imagen. El texto del primer
   comentario es nuevo (nunca copiar el CTA del copy tal cual) y su libro se
@@ -115,9 +139,11 @@ a mano (`imagen-post-constelaciones`).
   consolidado del paso 8).
 - `../../scripts/references/image_prompt_style.md` — estilo visual de la foto
   de fondo (lo usa `generate_post_image.py`, no esta skill directamente).
-- `../../scripts/references/canva_title_style.md` — tipografía y color del
-  título para el paso manual en Canva, y la regla de que no se agrega firma.
-- `../../scripts/generate_post_image.py` — genera la imagen de fondo.
+- `../../scripts/references/canva_title_style.md` — sección
+  `BAKED_TYPOGRAPHY`: mapeo exacto título/subtítulo/CTA y colores para esta
+  skill (ya no manual), y la regla de que no se agrega firma.
+- `../../scripts/generate_post_image.py` — genera la imagen de fondo y
+  hornea el título/subtítulo/CTA.
 - `../../scripts/build_paquete_docx.py` — arma el paquete consolidado del
   paso 8.
 - `testing/copy_gen_state.json` — estado de rotación de estructura

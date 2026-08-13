@@ -283,12 +283,12 @@ no solo autoría.
    `"photo"` (y el gancho) el script solo filtra por metadata (orientación,
    duración, autor) -- no puede detectar si un clip realmente encaja ni si de
    verdad se ve la misma persona; esos SIEMPRE pasan por la revisión completa
-   de 6 chequeos de abajo. Los momentos `"illustration"`/`"diagram"` del paso
+   de 7 chequeos de abajo. Los momentos `"illustration"`/`"diagram"` del paso
    5b son generación determinística sin persona, así que no aplican los
    chequeos de rostro/consistencia -- alcanza con abrir la imagen (tool de
    Read) y confirmar que no haya texto cortado, mal renderizado, o un
    diagrama con items pisándose. El clip del gancho (`00_gancho_*`), si lo
-   hay, pasa por esta misma revisión y los mismos 6 chequeos que cualquier
+   hay, pasa por esta misma revisión y los mismos 7 chequeos que cualquier
    momento -- no es un gate distinto ni más liviano. Con la tool de Bash y
    `ffmpeg` (ya disponible), extraer un frame de cada clip/foto descargado
    (para video:
@@ -296,7 +296,7 @@ no solo autoría.
    archivo.mp4 -vframes 1 -vf scale=270:480:force_original_aspect_ratio=
    decrease,pad=270:480:(ow-iw)/2:(oh-ih)/2:color=black salida.jpg`; para
    foto, copiar/redimensionar directo), armar una grilla por momento con
-   `hstack` y revisar cada una (tool de Read) con estos 6 chequeos:
+   `hstack` y revisar cada una (tool de Read) con estos 7 chequeos:
    - **Sin persona en cuadro** (living/habitación vacíos) -- rompe la regla
      "las personas son siempre el sujeto" de `image_prompt_style.md`.
    - **Emoción equivocada** (ej. una mujer sonriendo/comiendo tranquila para
@@ -323,7 +323,22 @@ no solo autoría.
      confirmar que efectivamente no hay ningún rostro identificable en
      cuadro -- si aparece uno (aunque sea de fondo, desenfocado), tratarlo
      como un fallo también.
-   Si un candidato falla alguno de estos 6 chequeos, volver a buscar solo
+   - **Cabeza/rostro cortado por el borde del encuadre** (nuevo, regla
+     `EDGE_CROP` en `constelaciones_brand_voice.md`): rechazar cualquier
+     candidato donde la cabeza, el rostro, o el mentón de una persona quede
+     cortado de forma abrupta por cualquier borde del cuadro (ej. cabeza a
+     la mitad, mentón justo en el borde superior) -- es una regla de
+     composición, independiente del chequeo de rostro permitido/prohibido de
+     arriba. Sigue siendo válido un plano medio, manos, hombros, espalda, o
+     una toma deliberada "desde los hombros hacia abajo" donde la cabeza
+     queda enteramente fuera del cuadro (sin ningún fragmento visible); lo
+     que falla es específicamente un corte parcial que se ve como error de
+     recorte. **Recortar/hacer zoom sobre cada borde del frame extraído**
+     antes de decidir, no solo mirarlo entero una vez -- un incidente real
+     (2026-08-13, en `post-constelaciones`) mostró que un mentón sin ojos
+     visibles pasa completamente desapercibido en un vistazo general, y
+     tampoco lo detecta ningún aviso automático en este flujo de Pexels.
+   Si un candidato falla alguno de estos 7 chequeos, volver a buscar solo
    ese slot importando el módulo (`gather_candidates(terms, api_key,
    author_id=protagonist_id)`, sin correr todo el script de nuevo),
    excluyendo las keys ya usadas en todo el reel (parsear
@@ -334,7 +349,7 @@ no solo autoría.
    (protagonista sola -> acompañada -> imagen de apoyo -> protagonista
    distinta -> match aproximado), nunca saltando directo a "protagonista
    distinta". Repetir hasta 2-3 rondas por slot. Si después de eso ningún
-   candidato nuevo pasa los 6 chequeos, **no forzar un clip débil**: dejar
+   candidato nuevo pasa los 7 chequeos, **no forzar un clip débil**: dejar
    ese momento con menos candidatos (2 en vez de 3, o incluso 1) y anotarlo
    explícito en `orden_edicion.txt` con qué se probó y por qué no sirvió.
    Al terminar, reescribir `orden_edicion.txt` a mano para reflejar
