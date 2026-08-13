@@ -28,11 +28,14 @@ Flow:
      clip) plays before the narration audio starts.
   6. Download the final MP4 to scripts/output_reels/<slug>/reel_final.mp4 by
      default, or to Desktop/Constelaciones - Publicaciones/<fecha>
-     <micronicho>/Paquete 4 - Reel/reel_final.mp4 when --micronicho is given
-     (the shared PACKAGING_STANDARD daily folder build_paquete_docx.py's
-     other three piece types already use), and delete the uploaded source
-     assets from JSON2Video's media library (its free tier only grants
-     ~50MB of storage, so cleaning up after every render matters).
+     <micronicho>/Paquete 4 - Reel/reel_final_<slug>.mp4 when --micronicho is
+     given (the shared PACKAGING_STANDARD daily folder build_paquete_docx.py's
+     other three piece types already use -- namespaced by slug there, unlike
+     the --out-dir default, because the daily package can now hold 2 reels
+     for the same micronicho sharing that one flat folder), and delete the
+     uploaded source assets from JSON2Video's media library (its free tier
+     only grants ~50MB of storage, so cleaning up after every render
+     matters).
 
 JSON2VIDEO_API_KEY is never hardcoded. If it is not already set as an
 environment variable, this script prompts for it (input is masked) and
@@ -61,6 +64,7 @@ import requests
 from dotenv import load_dotenv, set_key
 
 from build_paquete_docx import BASE_PUBLICACIONES_DIR
+from generate_post_image import BODY_TEXT_COLOR
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ENV_PATH = REPO_ROOT / ".env"
@@ -93,14 +97,19 @@ RESOLUTION = "instagram-story"
 CANVAS_WIDTH = 1080
 CANVAS_HEIGHT = 1920
 
-# Vivid cyan (approved via a local mockup), replacing the earlier solid
-# gold. Both word-color (the currently-spoken word) and line-color (the rest
-# of the line) are set to the SAME color on purpose -- an earlier version
-# used white for the line and gold only for the active word, but the user
-# wanted one solid color throughout, not a two-color contrast; that decision
-# still holds, only the color itself changed. "classic-progressive" still
-# reveals word by word, it just doesn't change color when it does.
-SUBTITLE_WORD_COLOR = "#22D3EE"
+# Warm white, replacing the earlier vivid cyan (#22D3EE) per user feedback --
+# computed FROM generate_post_image.py's BODY_TEXT_COLOR (the same warm
+# white now used for carousel content-slide body-text) instead of a second
+# hardcoded literal, so a reel's on-screen text and a carousel's baked
+# content-slide text can never drift apart -- change the color once, in one
+# place. Both word-color (the currently-spoken word) and line-color (the
+# rest of the line) are set to the SAME color on purpose -- an earlier
+# version used white for the line and gold only for the active word, but
+# the user wanted one solid color throughout, not a two-color contrast;
+# that decision still holds, only the color itself changed twice now (gold
+# -> cyan -> warm white). "classic-progressive" still reveals word by word,
+# it just doesn't change color when it does.
+SUBTITLE_WORD_COLOR = "#{:02X}{:02X}{:02X}".format(*BODY_TEXT_COLOR)
 SUBTITLE_LINE_COLOR = SUBTITLE_WORD_COLOR
 # Subtitles never had a font-family before (JSON2Video's own default for the
 # "subtitles" element is "Arial" when unset) -- now explicitly Poppins to
@@ -784,7 +793,9 @@ def main() -> int:
         "--micronicho", default=None,
         help="Slug del micronicho del dia (ej. 'dolor-heredado'). Si se pasa, "
         "el reel se guarda en Desktop/Constelaciones - Publicaciones/<fecha> "
-        f"<micronicho>/{REEL_SUBFOLDER}/reel_final.mp4 en vez de --out-dir/<reel_slug>/.",
+        f"<micronicho>/{REEL_SUBFOLDER}/reel_final_<reel_slug>.mp4 (namespaced "
+        "por reel_slug porque esa carpeta puede tener 2 reels del mismo dia) "
+        "en vez de --out-dir/<reel_slug>/reel_final.mp4.",
     )
     parser.add_argument(
         "--fecha", default=None,
@@ -951,9 +962,16 @@ def main() -> int:
         if args.micronicho:
             fecha = args.fecha or datetime.date.today().isoformat()
             out_dir = BASE_PUBLICACIONES_DIR / f"{fecha} {args.micronicho}" / REEL_SUBFOLDER
+            # Namespaced by reel_slug, unlike the --out-dir fallback below --
+            # Paquete 4 - Reel/ is a single flat folder shared by every reel
+            # of the same day+micronicho (the daily package can now have 2
+            # reels covering different angles of the same micronicho), so a
+            # fixed "reel_final.mp4" would let the second render silently
+            # overwrite the first.
+            out_path = out_dir / f"reel_final_{args.reel_slug}.mp4"
         else:
             out_dir = Path(args.out_dir) / args.reel_slug
-        out_path = out_dir / "reel_final.mp4"
+            out_path = out_dir / "reel_final.mp4"
         print(f"Descargando video final a {out_path}...")
         download_final(result["url"], out_path)
 

@@ -54,28 +54,39 @@ deliberately **Poppins**, not Anton/Oswald, so carousels and reels
 (`render_reel_json2video.py`'s hook text) read as one brand system instead of
 two different ones:
 
-- **Título** (main headline, every slide): Poppins Bold, `#F2A900`, same
-  color as the manual spec above but a different font family on purpose.
-- **Subtítulo** (accent line, every slide that has one): Playfair Display
-  italic, `#FAE8A8` -- identical to the manual spec and to the reel hook's
-  accent line (`HOOK_ACCENT_FONT_URL` in `render_reel_json2video.py`).
-- **Hook (slide 1) only:** a third short line below título/subtítulo,
-  Poppins SemiBold, same pale gold `#FAE8A8` as the subtitle so it doesn't
-  compete in hierarchy with the main headline.
-- **Content slides + "Para asentar" only:** the full microdolor paragraph,
-  baked separately as its own block -- Poppins Bold, cyan `#22D3EE` (same
-  color as the reel narration subtitles), with a full-frame dark gradient
+- **Título + subtítulo -- hook (slide 1) ONLY.** Título: Poppins Bold,
+  `#F2A900`, same color as the manual spec above but a different font
+  family on purpose. Subtítulo: Playfair Display italic, `#FAE8A8` --
+  identical to the manual spec and to the reel hook's accent line
+  (`HOOK_ACCENT_FONT_URL` in `render_reel_json2video.py`). Plus a third
+  short line below título/subtítulo, Poppins SemiBold, same pale gold
+  `#FAE8A8` as the subtitle so it doesn't compete in hierarchy with the
+  main headline. **No other slide in the carousel carries a título or
+  subtítulo at all** -- content slides, "Para asentar," and the CTA used to
+  each get their own gold título + cream subtítulo (making every slide look
+  like its own small hook); that per-slide mini-title was dropped per user
+  feedback, so the hook is now the only slide with this typography tier.
+- **Content slides, "Para asentar," and the CTA (every slide after the
+  hook):** ONLY the full microdolor paragraph (or, for the CTA, the full
+  bridge), baked as its own block -- Poppins Bold, warm white `#F5F0E6`
+  (same color as the reel narration subtitles; was cyan `#22D3EE` until
+  user feedback that white read as more legible and more cohesive with the
+  brand's warm photo tones than cyan did), with a full-frame dark gradient
   scrim behind it (same stops as `GRADIENT_HTML_TEMPLATE` in
   `render_reel_json2video.py`) for contrast over an uncontrolled real Pexels
-  photo. Never combined with the hook's third line on the same slide.
-- **CTA (slide 6) only:** título + subtítulo, no third block -- the CTA's
-  weight comes from the bridge sentence itself (see
-  `constelaciones_brand_voice.md`), not from an extra text tier.
-- **Placement:** automatic, not manual -- a face-safe zone (OpenCV veto,
-  since a real Pexels photo has no requested composition to trust
-  deterministically) picks the top or bottom band of the frame; the content-
-  slide body block gets a wider band (`BODY_BAND_FRACTION`) since a full
-  paragraph needs more room than a short headline.
+  photo. No título, no subtítulo, nothing gold or italic on these slides.
+- **Placement -- hook (slide 1):** forced, not face-safe, on purpose.
+  `--force-center-zone` bakes the title dead-centered on the whole frame
+  regardless of whether it covers the protagonist's face -- a deliberate
+  exception (see `constelaciones_brand_voice.md`'s "Design mix" for the
+  full reasoning) after simpler face-avoiding placements (top/bottom veto,
+  then a middle-band preference) still read as unbalanced on real renders.
+- **Placement -- every other slide (content, "Para asentar," CTA):**
+  unchanged, still automatic and face-safe -- an OpenCV veto (since a real
+  Pexels photo has no requested composition to trust deterministically)
+  picks top or bottom, with a wider band (`BODY_BAND_FRACTION`) since a
+  full paragraph needs more room than a short headline. These slides never
+  use the hook's forced-center exception.
 
 ## Reference render
 

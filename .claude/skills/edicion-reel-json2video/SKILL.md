@@ -1,6 +1,6 @@
 ---
 name: edicion-reel-json2video
-description: Arma el video final de un reel de Constelaciones Familiares con la API de JSON2Video, a partir de los clips de B-roll y el orden_edicion.txt de seleccion-clips-pexels mas la narracion.mp3 de narracion-voz-gemini, ya guardados con el mismo slug del reel. Ordena las escenas segun orden_edicion.txt (un clip por momento, prefiriendo video sobre foto entre los 1-3 candidatos de cada uno), reparte la duracion total de la narracion entre los momentos en proporcion a las palabras de cada linea del guion, sube todo a JSON2Video (clips, narracion y musica de fondo opcional) porque la API solo acepta URLs publicas, genera subtitulos automaticos nativos en espanol via Whisper en Poppins, posicionados en la zona media-baja del encuadre (no pegados al fondo), en un solo color cian vivo (sin contraste entre la palabra activa y el resto de la linea), con un degradado oscuro fuerte que cubre todo el cuadro de arriba a abajo (confirmado visible incluso en el frame mas claro del video), agrega una transicion de fundido cruzado de 0.4s entre cada momento (incluido el gancho, si lo hay) en vez de cortes secos, opcionalmente arma un gancho inicial de 2s antes de que empiece la narracion (titular grande a dos fuentes -- Poppins bold amarillo/naranja de marca + Playfair Display italic dorado palido, mismos colores que los titulos de los posts estaticos -- como dos elementos `text` nativos de JSON2Video, no un elemento `html`, sobre su propio clip de fondo si seleccion-clips-pexels genero uno dedicado para el texto del gancho, o reciclando el clip de momento 1 si no), mezcla una pista de musica de fondo en volumen bajo -- la pista de marca fija por defecto en marketing/brand_music.mp3 (gitignored) si existe, o la que el usuario pase con --music como override puntual, o ninguna si no hay ni una ni la otra (no hay musica de stock integrada en JSON2Video), renderiza en vertical 9:16 (instagram-story, 1080x1920) y descarga el resultado a Desktop/Constelaciones - Publicaciones/<fecha> <micronicho>/Paquete 4 - Reel/reel_final.mp4 (via --micronicho, per PACKAGING_STANDARD), o a scripts/output_reels/<slug>/reel_final.mp4 si se corre suelto sin ese flag. Usar para "arma el reel final de [tema]", "edita el video con los clips y la narracion", "renderiza el reel". Not for writing the script (write it first), not for selecting B-roll clips (use seleccion-clips-pexels), and not for generating the narration audio (use narracion-voz-gemini) -- this skill only assembles what those two already produced.
+description: Arma el video final de un reel de Constelaciones Familiares con la API de JSON2Video, a partir de los clips de B-roll y el orden_edicion.txt de seleccion-clips-pexels mas la narracion.mp3 de narracion-voz-gemini, ya guardados con el mismo slug del reel. Ordena las escenas segun orden_edicion.txt (un clip por momento, prefiriendo video sobre foto entre los 1-3 candidatos de cada uno), reparte la duracion total de la narracion entre los momentos en proporcion a las palabras de cada linea del guion, sube todo a JSON2Video (clips, narracion y musica de fondo opcional) porque la API solo acepta URLs publicas, genera subtitulos automaticos nativos en espanol via Whisper en Poppins, posicionados en la zona media-baja del encuadre (no pegados al fondo), en un solo color blanco calido (sin contraste entre la palabra activa y el resto de la linea), con un degradado oscuro fuerte que cubre todo el cuadro de arriba a abajo (confirmado visible incluso en el frame mas claro del video), agrega una transicion de fundido cruzado de 0.4s entre cada momento (incluido el gancho, si lo hay) en vez de cortes secos, opcionalmente arma un gancho inicial de 2s antes de que empiece la narracion (titular grande a dos fuentes -- Poppins bold amarillo/naranja de marca + Playfair Display italic dorado palido, mismos colores que los titulos de los posts estaticos -- como dos elementos `text` nativos de JSON2Video, no un elemento `html`, sobre su propio clip de fondo si seleccion-clips-pexels genero uno dedicado para el texto del gancho, o reciclando el clip de momento 1 si no), mezcla una pista de musica de fondo en volumen bajo -- la pista de marca fija por defecto en marketing/brand_music.mp3 (gitignored) si existe, o la que el usuario pase con --music como override puntual, o ninguna si no hay ni una ni la otra (no hay musica de stock integrada en JSON2Video), renderiza en vertical 9:16 (instagram-story, 1080x1920) y descarga el resultado a Desktop/Constelaciones - Publicaciones/<fecha> <micronicho>/Paquete 4 - Reel/reel_final_<reel_slug>.mp4 (via --micronicho, per PACKAGING_STANDARD -- namespaced by reel_slug so the daily package can hold 2 reels covering different angles of the same micronicho without overwriting each other), o a scripts/output_reels/<slug>/reel_final.mp4 si se corre suelto sin ese flag. Usar para "arma el reel final de [tema]", "edita el video con los clips y la narracion", "renderiza el reel". Not for writing the script (write it first), not for selecting B-roll clips (use seleccion-clips-pexels), and not for generating the narration audio (use narracion-voz-gemini) -- this skill only assembles what those two already produced.
 ---
 
 # Edicion del reel final (JSON2Video)
@@ -55,12 +55,18 @@ automaticamente el audio de la narracion con el modelo Whisper en espanol --
 no hace falta pasar un guion de texto por separado. Estilo confirmado por
 prueba real: `classic-progressive` (revela palabra por palabra). Fuente
 `Poppins` (`font-family` en `settings`; antes no se especificaba y caia al
-default `Arial` de JSON2Video). Color **unico**, `#22D3EE` (cian vivo,
-aprobado tras un mockup local -- reemplaza al dorado `#B8985E` que se usaba
-antes), para `word-color` y `line-color` por igual -- una version anterior
-usaba blanco para la linea y un color solo para la palabra activa, pero el
-usuario pidio un solo color sin ese contraste; esa decision se mantiene, solo
-cambio el color en si. La revelacion progresiva palabra por palabra se
+default `Arial` de JSON2Video). Color **unico**, `#F5F0E6` (blanco calido,
+mismo color que el `--body-text` de las slides de contenido de
+carrusel-constelaciones en `generate_post_image.py` -- asi el texto en
+pantalla de un reel y el texto quemado de un carrusel leen como el mismo
+sistema. Reemplaza al cian `#22D3EE` que se uso antes -- fue feedback del
+usuario que el blanco se lee mejor y combina mejor con el tono calido de
+las fotos que el cian; el cian a su vez habia reemplazado al dorado
+`#B8985E` original), para `word-color` y `line-color` por igual -- una
+version anterior usaba blanco para la linea y un color solo para la
+palabra activa, pero el usuario pidio un solo color sin ese contraste; esa
+decision se mantiene, solo cambio el color en si (tres veces ya: dorado ->
+cian -> blanco calido). La revelacion progresiva palabra por palabra se
 mantiene, solo que no cambia de color al hacerlo.
 
 **Posicion de subtitulos (regla dura, no preguntar):** `position: "custom"`
@@ -272,6 +278,15 @@ carpeta por separado antes de fallar.
    pedidos en la misma conversacion), reusar el MISMO slug de micronicho ya
    usado para esas piezas hermanas -- puede coincidir con `<reel_slug>` o
    no. Si es una pieza suelta, puede coincidir con `<reel_slug>`.
+   **Cuando el paquete diario incluye 2 reels** (2 angulos distintos del
+   mismo micronicho -- ver `REEL_SCRIPT_LENGTH` y la nota de composicion
+   diaria en `PACKAGING_STANDARD`), cada uno necesita su propio
+   `<reel_slug>` (ej. `dolor-heredado-angulo1` / `dolor-heredado-angulo2`,
+   o cualquier par de slugs distintos) aunque compartan el MISMO
+   `--micronicho` -- las carpetas de origen de `seleccion-clips-pexels`/
+   `narracion-voz-gemini` y el archivo final (`reel_final_<reel_slug>.mp4`,
+   ver mas abajo) se namespacean por `<reel_slug>`, asi que dos reels con
+   el mismo slug se pisarian entre si.
    **Ejecutar el script** por la tool de Bash, desde la raiz del repo:
    ```
    python scripts/render_reel_json2video.py <reel_slug> [--music "ruta/al/archivo.mp3"] [--quality high] [--hook-main "FRASE PRINCIPAL" --hook-accent "frase de acento"] --micronicho "<slug de micronicho>"
@@ -300,10 +315,13 @@ carpeta por separado antes de fallar.
      1080x1920), lo envia y hace poll cada ~7s hasta que termina.
    - Descarga el resultado final a `Desktop/Constelaciones -
      Publicaciones/<fecha de hoy> <slug de micronicho>/Paquete 4 -
-     Reel/reel_final.mp4` (gracias a `--micronicho` en el paso 4) -- ya NO
+     Reel/reel_final_<reel_slug>.mp4` (gracias a `--micronicho` en el paso
+     4 -- el nombre lleva el `<reel_slug>` porque esa carpeta es compartida
+     por los 2 reels del dia cuando el paquete diario los incluye) -- ya NO
      en `scripts/output_reels/<reel_slug>/`, que era la ubicacion antes de
-     esta convencion (sigue siendo el default si se corre el script sin
-     `--micronicho`, ej. para pruebas sueltas).
+     esta convencion (sigue siendo el default, con el nombre plano
+     `reel_final.mp4`, si se corre el script sin `--micronicho`, ej. para
+     pruebas sueltas).
    - Borra los assets subidos a JSON2Video (narracion, clips, musica) al
      terminar, exito o error, para no agotar el storage gratuito de la
      cuenta.
@@ -339,10 +357,13 @@ carpeta por separado antes de fallar.
 - Musica de fondo nunca bloquea el render, sea la pista de marca por defecto
   o una pasada con `--music` -- si ninguna existe, el reel se renderiza
   igual, solo con narracion y subtitulos (ver seccion de arriba).
-- El archivo final siempre se llama `reel_final.mp4` -- no cambiar el
-  nombre ni la extension sin que el usuario lo pida explicitamente. La
-  carpeta es siempre `Desktop/Constelaciones - Publicaciones/<fecha> <slug
-  de micronicho>/Paquete 4 - Reel/` (paso 4, via `--micronicho`) salvo que
+- El archivo final se llama `reel_final_<reel_slug>.mp4` cuando se usa
+  `--micronicho` (namespaced porque esa carpeta puede compartirse entre 2
+  reels del mismo dia), o `reel_final.mp4` a secas en el default sin
+  `--micronicho` -- no cambiar ninguno de los dos patrones ni la extension
+  sin que el usuario lo pida explicitamente. La carpeta es siempre
+  `Desktop/Constelaciones - Publicaciones/<fecha> <slug de micronicho>/
+  Paquete 4 - Reel/` (paso 4, via `--micronicho`) salvo que
   el reel se corra suelto sin ese flag, en cuyo caso cae al viejo default
   `scripts/output_reels/<reel_slug>/`.
 - Siempre mostrar al usuario las advertencias heredadas de
@@ -384,9 +405,11 @@ carpeta por separado antes de fallar.
   subtitulos, ver siguiente).
 - `../../scripts/references/canva_title_style.md` -- fuente de verdad de los
   colores del titular del gancho (`#F2A900` / `#FAE8A8`), compartidos con el
-  titulo de los posts estaticos. El color cian de los subtitulos (`#22D3EE`)
-  es especifico de los reels y vive solo en `SUBTITLE_WORD_COLOR` en el
-  script, no en este archivo.
+  titulo de los posts estaticos. El blanco calido de los subtitulos
+  (`#F5F0E6`) tampoco vive aqui -- `SUBTITLE_WORD_COLOR` en el script lo
+  calcula importando `BODY_TEXT_COLOR` desde `generate_post_image.py` (una
+  sola fuente de verdad compartida con las slides de contenido del
+  carrusel), en vez de un literal hardcodeado propio.
 
 ## Related skills
 

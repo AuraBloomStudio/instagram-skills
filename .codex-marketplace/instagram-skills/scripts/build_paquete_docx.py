@@ -5,9 +5,12 @@ hashtags (if the format uses them) + a fixed checklist, all in one file.
 
 See PACKAGING_STANDARD in scripts/references/constelaciones_brand_voice.md
 for the full rule this implements. Called by post-constelaciones,
-carrusel-constelaciones, imagen-post-constelaciones, and
-post-viral-constelaciones as the last step of their flow -- never by
-historias-constelaciones or the reel skills (see that section for why).
+carrusel-constelaciones (twice per carousel -- once for the feed version,
+once more for its optional 6-slide 9:16 "Carrusel Historias" reuse),
+imagen-post-constelaciones, and post-viral-constelaciones as the last step
+of their flow -- never by historias-constelaciones (a separate, unpackaged
+skill for a standalone Story) or the reel skills (see that section for
+why).
 
 This script never decides copy, CTA wording, or which book to mention --
 those decisions are made by whoever is drafting the piece (the calling
@@ -29,12 +32,10 @@ lleva imagen), 1 vez para post-constelaciones/imagen-post-constelaciones,
 una vez por slide en orden de publicación para carrusel-constelaciones.
 
 --primer-comentario es opcional: si se omite, esa sección del paquete no se
-genera. Pensado para piezas sin CTA/libro por diseño (ej. un paquete
-retroactivo de historias-constelaciones, que no usa PACKAGING_STANDARD de
-forma automática pero puede empaquetarse a mano con este script) -- para
-las 4 skills que sí llaman a este script como parte de su flujo normal,
---primer-comentario sigue siendo obligatorio en la práctica porque
-PACKAGING_STANDARD lo exige.
+genera. Para --tipo-pieza carrusel-historia (Stories no tiene mecánica de
+primer comentario, el CTA ya va horneado en la última imagen) siempre se
+omite; para los otros tres tipos sigue siendo obligatorio en la práctica
+porque PACKAGING_STANDARD lo exige.
 
 Hashtags nunca se piden por separado -- se extraen automáticamente del
 último párrafo del copy si empieza con "#" (la convención ya fija de dónde
@@ -73,10 +74,10 @@ BASE_PUBLICACIONES_DIR = Path(os.path.expanduser("~")) / "Desktop" / "Constelaci
 # same names/numbering PACKAGING_STANDARD documents, kept as constants here
 # (not free text per call) so every skill produces byte-identical folder
 # names instead of each one typing its own slightly different spelling.
-# "carrusel-historia" has no calling skill yet (historias-constelaciones is
-# not part of PACKAGING_STANDARD) -- it exists so a piece can still be
-# packaged by hand into the right place, per PACKAGING_STANDARD's note on
-# Historias.
+# "carrusel-historia" is called by carrusel-constelaciones's own step 17
+# (the 6-slide 9:16 reuse of that same feed carousel) -- never by
+# historias-constelaciones, which is a separate, unpackaged skill for a
+# standalone Story with no feed carousel behind it.
 PIECE_TYPE_SUBFOLDERS = {
     "imagen-texto": Path("Paquete 1 - Imagen y Texto Largo"),
     "carrusel": Path("Paquete 2 - Carrusel") / "Carrusel Publicación",

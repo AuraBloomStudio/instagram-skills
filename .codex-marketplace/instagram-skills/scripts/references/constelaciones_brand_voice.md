@@ -306,21 +306,44 @@ disconnected closer next to five photo slides sharing one protagonist); now
 every slide, hook through CTA, shows the same protagonist/setting coherence
 front to back. This mix repeats on every carousel; it is not optional or
 randomized per slide. Baked text per slide type (all via
-`generate_post_image.py`'s `render_headline`, Poppins Bold `#F2A900` title +
-Playfair Display italic `#FAE8A8` subtitle on every slide that has one):
-- **Hook (slide 1):** título + subtítulo + a third short line
+`generate_post_image.py`'s `render_headline`):
+- **Hook (slide 1) only:** título (Poppins Bold `#F2A900`) + subtítulo
+  (Playfair Display italic `#FAE8A8`) + a third short line
   (`--headline-extra`, Poppins SemiBold, same pale gold as the subtitle).
+  This is the ONLY slide in the carousel that carries a gold title/subtitle
+  -- content slides, "Para asentar," and the CTA dropped theirs (see next
+  bullet).
+  **Placement is forced, deliberate exception:** the hook always uses
+  `--force-center-zone`, which bakes the title dead-centered on the whole
+  frame with NO face check at all -- if that covers the protagonist's face,
+  it covers it, on purpose. This replaces the earlier "safe zone" logic
+  (top/bottom picked by an OpenCV face veto, later a middle-band
+  preference) that still left the hook feeling unbalanced or empty-heavy on
+  real renders; simple fixed centering reads better than any face-avoiding
+  placement tried so far. **This exception is limited to the hook slide
+  only.** Every other slide of the carousel, and every other skill that
+  bakes text (`imagen-post-constelaciones`, `post-constelaciones`,
+  `historias-constelaciones`), still runs the normal OpenCV face veto
+  unchanged -- covering a face there remains a hard defect, not a style
+  choice.
 - **Content slides, "Para asentar," and the CTA** (every slide after the
-  hook): título + subtítulo, PLUS that slide's full paragraph baked
-  separately as `--body-text` -- Poppins Bold, cyan `#22D3EE` (same color as
-  the reel narration subtitles), with a dark gradient scrim behind it for
-  contrast (same stops as `render_reel_json2video.py`'s
-  `GRADIENT_HTML_TEMPLATE`). This is new text on the image, not just a
-  distilled headline -- the reader should be able to read the actual
-  microdolor (or, for the CTA, the full bridge) without opening the caption.
-  The CTA's `--body-text` is the bridge paragraph itself (see the CTA rule
-  above) -- never the hook's `--headline-extra` treatment, and never a bare
-  título/subtítulo with no paragraph.
+  hook): ONLY that slide's full paragraph, baked as `--body-text` -- Poppins
+  Bold, warm white `#F5F0E6` (same color as the reel narration subtitles;
+  was cyan `#22D3EE` until user feedback that white read as more legible
+  and more cohesive with the brand's warm photo tones), with a dark
+  gradient scrim behind it for contrast (same stops as
+  `render_reel_json2video.py`'s `GRADIENT_HTML_TEMPLATE`). **No gold title,
+  no italic subtitle, no `--headline-main`/`--headline-accent` at all** --
+  the earlier per-slide "mini-title" look (each content slide behaving like
+  its own small hook) was dropped per user feedback; every slide after the
+  hook is body-text only now, and `generate_post_image.py` accepts
+  `--body-text` on its own without requiring `--headline-main` for exactly
+  this reason. Placement keeps the normal OpenCV face veto (top/bottom,
+  never forced center -- that exception is the hook's alone). This is new
+  text on the image, not just a distilled headline -- the reader should be
+  able to read the actual microdolor (or, for the CTA, the full bridge)
+  without opening the caption. The CTA's `--body-text` is the bridge
+  paragraph itself (see the CTA rule above).
 
 **Photo sourcing: Pexels, not Gemini.** Every slide (hook + content + Para
 asentar + CTA -- the whole carousel, no exceptions) is a real stock photo
@@ -535,9 +558,12 @@ recreated.
 │                                             imagen-post-constelaciones
 ├── Paquete 2 - Carrusel/
 │   ├── Carrusel Publicación/              <- carrusel-constelaciones
-│   └── Carrusel Historias/                <- historias-constelaciones,
-│                                             packaged by hand for now (see
-│                                             below), not automated
+│   └── Carrusel Historias/                <- carrusel-constelaciones's own
+│                                             step 17 (6-slide 9:16 reuse of
+│                                             the feed carousel, see below);
+│                                             historias-constelaciones is a
+│                                             separate, unpackaged skill for
+│                                             a standalone Story
 ├── Paquete 3 - Texto Reflexivo/           <- post-viral-constelaciones
 │                                             (both variants land here,
 │                                             one PAQUETE file each)
@@ -556,19 +582,58 @@ slightly different spelling. `edicion-reel-json2video` doesn't call
 `scripts/render_reel_json2video.py` computes `Paquete 4 - Reel/` itself from
 its own `--micronicho`/`--fecha` flags.
 
-**`Carrusel Historias/` is a deliberate placeholder, not yet automated.**
-`historias-constelaciones` is still NOT part of PACKAGING_STANDARD's
-"Applies to" list above -- Stories carry no CTA/book/hashtags by design (see
-`STORY_STRUCTURES`), so the normal primer-comentario step doesn't apply. For
-now, a Story's `PAQUETE - <hook>.docx` (image + copy + checklist only, no
-primer comentario or hashtags section -- `--primer-comentario` is optional
-in `build_paquete_docx.py` precisely for this case) can still be built by
-hand with `--tipo-pieza carrusel-historia` when a day's package includes a
-Story, but no skill does this automatically yet. The intent (not yet
-built) is to eventually redesign Stories as a carousel-adapted format
-instead of `historias-constelaciones`' current standalone shape -- until
-that redesign happens, treat any `Carrusel Historias/` package as a manual,
-one-off addition.
+**`Carrusel Historias/` is now automated -- carrusel-constelaciones's own
+step 17, not `historias-constelaciones`.** The originally-planned redesign
+("Stories as a carousel-adapted format instead of a standalone shape")
+shipped: `carrusel-constelaciones` can optionally also produce a 6-slide
+9:16 "Carrusel Historias" package right after building its normal feed
+`PAQUETE`, reusing the exact same hook + first 3 content slides (in
+published order) + "Para asentar" + CTA of that same feed carousel -- same
+photos, same baked text, only re-cropped to `--aspect 9:16`, with the CTA's
+closing "en la descripción" swapped for "en mi bio" (Stories has no caption
+field, so the original phrasing would be false there). No new copy is
+drafted and no new Pexels search runs. Its `PAQUETE - <hook>.docx` still
+skips the primer-comentario section (`--primer-comentario` stays optional
+in `build_paquete_docx.py` for exactly this reason) since Stories has no
+first-comment mechanic -- the CTA that matters is already baked onto the
+last image, unlike the feed version where it lives in a separate comment.
+**`historias-constelaciones` still exists and is unchanged** for a Story
+requested on its own, with its own topic, with no feed carousel behind it
+that same day -- it is not part of PACKAGING_STANDARD's "Applies to" list
+above (Stories carry no CTA/book/hashtags by design when drafted that way,
+see `STORY_STRUCTURES`), and its output still isn't packaged into a
+`PAQUETE`.
+
+**Daily package volume, per numbered subfolder:**
+```
+Paquete 1 - Imagen y Texto Largo/     1 pieza  (post-constelaciones)
+Paquete 2 - Carrusel/                 2 piezas (carrusel-constelaciones: el
+                                       carrusel de feed normal, MÁS su
+                                       versión Carrusel Historias -- ver
+                                       arriba, ambas del mismo carrusel)
+Paquete 3 - Texto Reflexivo/          2 piezas (post-viral-constelaciones:
+                                       Variante 1 + Variante 2, comportamiento
+                                       ya existente, sin cambios)
+Paquete 4 - Reel/                     2 piezas (edicion-reel-json2video)
+```
+- **Paquete 2 nunca es "un carrusel + una historia distinta"** -- son
+  siempre EL MISMO carrusel en dos formatos (ver el bloque de arriba); no
+  hay redacción ni búsqueda de fotos por separado para la pieza 2 de este
+  paquete.
+- **Paquete 4 son 2 reels cubriendo 2 ángulos distintos del mismo
+  micronicho, ambos con guion redactado por el asistente** (no se le pide
+  al usuario que escriba los guiones) -- mismo criterio de longitud
+  (`REEL_SCRIPT_LENGTH`, 108-136 palabras cada uno) y mismo proceso completo
+  (`seleccion-clips-pexels` + `narracion-voz-gemini` +
+  `edicion-reel-json2video`) para cada uno, con su propio `<reel_slug>`
+  distinto por reel pero el MISMO `--micronicho` para que ambos caigan en
+  `Paquete 4 - Reel/` -- ver la nota de namespacing por `reel_slug` en
+  `edicion-reel-json2video`'s `SKILL.md` (el nombre de archivo final es
+  `reel_final_<reel_slug>.mp4`, no un `reel_final.mp4` fijo, precisamente
+  porque esa carpeta ahora es compartida por 2 reels).
+- Este es el volumen estándar del paquete diario completo (7 piezas
+  publicables + `RESUMEN DEL DÍA.docx`) salvo que el usuario pida
+  explícitamente un subconjunto para un día puntual.
 
 **Fixed section order, same for all four skills:**
 

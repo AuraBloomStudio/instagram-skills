@@ -1,6 +1,6 @@
 ---
 name: carrusel-constelaciones
-description: Draft a multi-slide organic Instagram/Facebook carousel for Constelaciones Familiares in one of 5 structures (narrativo problema-explicación-Para asentar-CTA, lista de comportamientos, antes/después, autodiagnóstico, mini-historia con giro), following the brand voice in scripts/references/constelaciones_brand_voice.md (español neutro colombiano, no voseo), with the first content slide always carrying the carousel's strongest pain beat, never a generic opener, and every content slide/"Para asentar"/CTA written as a real 2-4 sentence paragraph naming one concrete microdolor (or, for the CTA, the reinforced bridge), not a one-line headline. Sources every slide (hook + content + "Para asentar" + CTA -- the whole carousel) from real Pexels stock photography via scripts/search_pexels_photo.py -- the same protagonist-consistency cascade seleccion-clips-pexels already uses for reels, reused by import -- never Gemini, and never any other skill's photo pipeline (post-constelaciones, imagen-post-constelaciones, historias-constelaciones keep generating with Gemini, unaffected). Bakes text directly onto every slide with Pillow (Poppins Bold + Playfair Display italic, same typography as reels): hook gets título + subtítulo + a third short line; every other slide including the CTA gets título + subtítulo + its full paragraph in cyan #22D3EE over a dark gradient scrim, the CTA's paragraph being a bridge sentence that explicitly names the specific pain the carousel just developed before mentioning the book and pointing the reader to the caption for the link (never baking the link itself onto a slide, since Instagram never makes on-image text clickable). Placement always runs an OpenCV face check (needs opencv-python) since a real Pexels photo has no requested composition to trust blindly. Saves each carousel's finished images to its own Desktop/Imagenes Posts/<slug>/ subfolder instead of the shared root, then builds one consolidated "PAQUETE - <hook>.docx" (every slide image in order + the caption + a new first-comment CTA + hashtags + a publish checklist, per PACKAGING_STANDARD) via scripts/build_paquete_docx.py. Use for "hazme un carrusel de [tema]", "necesito un carrusel sobre [tema]", optionally with a visual style named ("...estilo minimalista/tipo libro/caricatura/storytelling/mezcla..."). Not for single-image posts (use post-constelaciones) or paid ads (future ads-constelaciones).
+description: Draft a multi-slide organic Instagram/Facebook carousel for Constelaciones Familiares in one of 5 structures (narrativo problema-explicación-Para asentar-CTA, lista de comportamientos, antes/después, autodiagnóstico, mini-historia con giro), following the brand voice in scripts/references/constelaciones_brand_voice.md (español neutro colombiano, no voseo), with the first content slide always carrying the carousel's strongest pain beat, never a generic opener, and every content slide/"Para asentar"/CTA written as a real 2-4 sentence paragraph naming one concrete microdolor (or, for the CTA, the reinforced bridge), not a one-line headline. Sources every slide (hook + content + "Para asentar" + CTA -- the whole carousel) from real Pexels stock photography via scripts/search_pexels_photo.py -- the same protagonist-consistency cascade seleccion-clips-pexels already uses for reels, reused by import -- never Gemini, and never any other skill's photo pipeline (post-constelaciones, imagen-post-constelaciones, historias-constelaciones keep generating with Gemini, unaffected). Bakes text directly onto every slide with Pillow: the hook (slide 1) is the ONLY slide with a título + subtítulo + a third short line (Poppins Bold #F2A900 + Playfair Display italic #FAE8A8, same typography as reels), forced dead-centered on the frame regardless of whether it covers the protagonist's face (--force-center-zone, a deliberate exception limited to this one slide); every other slide including the CTA carries ONLY its full paragraph in warm white #F5F0E6 over a dark gradient scrim, no gold title or subtitle at all, placed via the normal OpenCV face veto (needs opencv-python, unchanged everywhere except the hook), the CTA's paragraph being a bridge sentence that explicitly names the specific pain the carousel just developed before mentioning the book and pointing the reader to the caption for the link (never baking the link itself onto a slide, since Instagram never makes on-image text clickable). Saves each carousel's finished images to its own Desktop/Imagenes Posts/<slug>/ subfolder instead of the shared root, then builds one consolidated "PAQUETE - <hook>.docx" (every slide image in order + the caption + a new first-comment CTA + hashtags + a publish checklist, per PACKAGING_STANDARD) via scripts/build_paquete_docx.py. Optionally also produces a 6-slide "Carrusel Historias" version (9:16, reusing the same hook + first 3 content slides + Para asentar + CTA from this same feed carousel, no new copy or photos, only the CTA's closing "en la descripción" swapped for "en mi bio") for the daily package, replacing the old standalone historias-constelaciones piece. Use for "hazme un carrusel de [tema]", "necesito un carrusel sobre [tema]", optionally with a visual style named ("...estilo minimalista/tipo libro/caricatura/storytelling/mezcla..."). Not for single-image posts (use post-constelaciones) or paid ads (future ads-constelaciones).
 ---
 
 # Carrusel Constelaciones (multi-slide)
@@ -27,6 +27,11 @@ contenido + "Para asentar" + CTA), y genera la imagen final de cada slide
   actualizó en esta pasada (mezcla sigue sin usarse desde que se canceló la
   prueba) -- si se retoma `mezcla`, revisar primero si su pierna `foto` debe
   pasar a Pexels también antes de usarla.
+- "...y también la versión historias" / "con su carrusel de historias" /
+  pedida como parte de un paquete diario que incluye "Carrusel Historias" --
+  activa el paso 17 (ver Flujo) además del carrusel de feed normal. Nunca
+  se genera sola sin su carrusel de feed asociado del mismo día -- para una
+  Story suelta sin carrusel, usar `historias-constelaciones`.
 
 No se activa para posts de una sola imagen (`post-constelaciones`) ni para
 anuncios pagados.
@@ -48,25 +53,35 @@ real quedaba desconectado visualmente de las otras 5 slides que sí comparten
 protagonista/ambiente. Ahora las 6 slides, hook a CTA, llevan foto real de
 fondo con la misma coherencia visual.
 
-**Texto quemado, no editado a mano en Canva, con 2 niveles distintos según el
-tipo de slide** (todo vía `render_headline` en `generate_post_image.py`,
-Poppins Bold + Playfair Display italic, mismos colores que los reels):
-- **Hook:** título (`--headline-main`, dorado `#F2A900`) + subtítulo
-  (`--headline-accent`, dorado pálido `#FAE8A8`) + una tercera línea corta
+**Texto quemado, no editado a mano en Canva. El hook es la única slide con
+título -- todas las demás llevan solo el párrafo, sin título ni subtítulo**
+(todo vía `render_headline` en `generate_post_image.py`):
+- **Hook (slide 1) -- único con título/subtítulo:** título (`--headline-main`,
+  Poppins Bold, dorado `#F2A900`) + subtítulo (`--headline-accent`, Playfair
+  Display italic, dorado pálido `#FAE8A8`) + una tercera línea corta
   (`--headline-extra`, Poppins SemiBold, mismo dorado pálido).
-- **Contenido, "Para asentar", y CTA** (toda slide después del hook): título
-  + subtítulo, MÁS el párrafo completo de esa slide quemado aparte como
-  `--body-text` -- Poppins Bold cian `#22D3EE`, con degradado oscuro de fondo
+  **Posición forzada, sin veto de rostro (excepción deliberada, ver
+  `PACKAGING_STANDARD`/"Design mix" en `constelaciones_brand_voice.md`):**
+  siempre lleva `--force-center-zone`, que centra el bloque en todo el
+  cuadro sin correr el chequeo de OpenCV -- si eso tapa la cara de la
+  protagonista, la tapa a propósito. Ninguna otra slide de esta skill (ni
+  ningún otro skill) usa esta excepción.
+- **Contenido, "Para asentar", y CTA** (toda slide después del hook): SOLO
+  el párrafo completo de esa slide, quemado como `--body-text` -- Poppins
+  Bold blanco cálido `#F5F0E6` (antes era cian `#22D3EE`, cambiado por
+  feedback del usuario: el blanco se lee mejor y combina mejor con el tono
+  cálido de las fotos que el cian), con degradado oscuro de fondo
   (`apply_gradient_scrim`, mismos stops que `GRADIENT_HTML_TEMPLATE` de los
   reels) para que se lea encima de una foto real sin espacio negativo
-  garantizado. Para el CTA, ese párrafo es el bridge reforzado (ver
-  `constelaciones_brand_voice.md`) -- nunca el tercer bloque corto del hook,
-  nunca un título/subtítulo sin párrafo.
-`--headline-extra` es exclusivo del hook; `--body-text` es de todas las demás
-slides (nunca los dos juntos en la misma slide). La zona del texto **siempre**
-se resuelve con el veto de OpenCV (nunca la tabla determinística de ángulos de
-cámara, que solo tiene sentido cuando nosotros le pedimos la composición a
-Gemini -- acá la foto ya existe, no la generamos).
+  garantizado. **Sin `--headline-main` ni `--headline-accent` -- el
+  mini-título dorado por slide se eliminó** (cada slide de contenido ya no
+  se ve como su propio hook chico; eso quedó exclusivo de la slide 1).
+  `generate_post_image.py` acepta `--body-text` solo, sin exigir
+  `--headline-main`, justo para este caso. Para el CTA, ese párrafo es el
+  bridge reforzado (ver `constelaciones_brand_voice.md`).
+  **Estas slides SIGUEN con el veto de OpenCV normal** (top/bottom según
+  qué zona no tenga rostro) -- nunca `--force-center-zone`, esa excepción es
+  exclusiva del hook.
 
 **Carpeta propia por carrusel.** Las imágenes finales van a
 `Desktop/Imagenes Posts/<slug>/`, no a la raíz de `Imagenes Posts` -- el slug
@@ -112,17 +127,20 @@ se deriva del tema/hook al principio del flujo, mismo criterio que
    "First content slide carries the strongest pain (mandatory)". **Todo el
    texto en español neutro colombiano, nunca voseo ni modismos de otro país**
    — ver regla de idioma en "Voice fingerprint" de `constelaciones_brand_voice.md`.
-5. **Escribir los bloques cortos por slide (las 6-8), para quemar en la
+5. **Escribir los bloques cortos SOLO para el hook, para quemar en la
    imagen** — distintos del párrafo completo del paso 4, que se sigue
-   guardando entero en el `.docx`:
-   - `headline_main` (todas las slides): 3-8 palabras, la frase de mayor
-     impacto de esa slide.
-   - `headline_accent` (opcional, todas las slides): línea de cierre más
-     breve, cuando la slide tiene un reencuadre natural de dos partes.
+   guardando entero en el `.docx`. Las demás slides no llevan bloques
+   cortos, solo su párrafo completo (ver `body_text` abajo):
+   - `headline_main` (**solo el hook**): 3-8 palabras, la frase de mayor
+     impacto del hook.
+   - `headline_accent` (opcional, **solo el hook**): línea de cierre más
+     breve, cuando el hook tiene un reencuadre natural de dos partes.
    - `headline_extra` (**solo el hook**): una tercera línea corta adicional.
    - `body_text` (**toda slide después del hook, incluido el CTA**): el
      párrafo completo del paso 4 (para el CTA, el bridge reforzado), tal
-     cual, para quemar en cian. Nunca en el hook.
+     cual, para quemar en blanco cálido. Sin `headline_main` ni
+     `headline_accent` en estas slides -- el mini-título dorado por slide
+     de contenido ya no existe.
 6. **Términos de búsqueda de Pexels por slide** (todas -- hook + contenido +
    "Para asentar" + CTA, el carrusel entero): 2-3 `search_terms` en inglés
    por slide más `cutaway_terms` opcionales, siguiendo las mismas reglas de
@@ -214,11 +232,17 @@ se deriva del tema/hook al principio del flujo, mismo criterio que
     foto débil -- dejar el slide marcado para búsqueda manual.
 14. **Generar la imagen final de cada slide** por la tool de Bash, desde la
     raíz del repo, todas con `--out-dir "C:\Users\USUARIO\Desktop\Imagenes Posts\<slug>"`:
-    - **Hook:**
-      `python scripts/generate_post_image.py "<ruta a la slide 1>" --source-image "scripts/output_photos/<slug>/01_hook_<letra_elegida>.jpg" --headline-main "..." --headline-accent "..." --headline-extra "..." --out-dir "..."`
+    - **Hook (único comando con `--headline-main`/`--headline-accent`/
+      `--headline-extra`/`--force-center-zone`):**
+      `python scripts/generate_post_image.py "<ruta a la slide 1>" --source-image "scripts/output_photos/<slug>/01_hook_<letra_elegida>.jpg" --headline-main "..." --headline-accent "..." --headline-extra "..." --force-center-zone --out-dir "..."`
+      (`--force-center-zone` es exclusivo del hook -- fuerza el centrado sin
+      chequear rostro. NUNCA va en el comando de contenido/"Para asentar"/CTA
+      de abajo.)
     - **Contenido, "Para asentar", y CTA** (mismo comando para las tres, el
-      CTA ya no lleva `--flat-color`):
-      `python scripts/generate_post_image.py "<ruta a esa slide>" --source-image "scripts/output_photos/<slug>/NN_<label>_<letra>.jpg" --headline-main "..." --headline-accent "..." --body-text "<párrafo completo del paso 4>" --out-dir "..."`
+      CTA ya no lleva `--flat-color`; **sin `--headline-main` ni
+      `--headline-accent`** -- solo el párrafo, y sí corre el veto de OpenCV
+      normal, nunca `--force-center-zone`):
+      `python scripts/generate_post_image.py "<ruta a esa slide>" --source-image "scripts/output_photos/<slug>/NN_<label>_<letra>.jpg" --body-text "<párrafo completo del paso 4>" --out-dir "..."`
     - Si el estilo es `mezcla`, las slides clasificadas `ilustración`/`diagrama`
       siguen su propio camino (ver Recursos) -- no llevan `--source-image`.
     - No generar imagen para el archivo de caption.
@@ -255,6 +279,46 @@ se deriva del tema/hook al principio del flujo, mismo criterio que
     `Desktop/Posts Constelaciones/` y
     `Desktop/Imagenes Posts/<slug>/`), los complementa. Mostrar la ruta
     final al usuario junto con el resto del resultado.
+17. **Generar la versión Historias del mismo carrusel** (opcional -- solo
+    cuando el pedido pide explícitamente la versión historias, o es parte de
+    un paquete diario que la incluye; si no, terminar en el paso 16). Va a
+    `Paquete 2 - Carrusel/Carrusel Historias/`, reemplazando la pieza suelta
+    que generaba antes `historias-constelaciones` para el día. **Nunca
+    redacta contenido nuevo ni busca fotos nuevas** -- reutiliza al 100% lo
+    que este mismo carrusel ya produjo:
+    - **6 slides:** el hook + los primeros 3 slides de contenido en el orden
+      ya publicado (nunca elegidos por separado -- para estructuras
+      narrativas/con giro esos primeros 3 son el arranque real de la
+      historia, no serían coherentes sueltos de otro punto; para listas en
+      paralelo, el orden ya viene de mayor a menor pain por la regla de
+      "First content slide carries the strongest pain") + "Para asentar" +
+      CTA. Si el carrusel de feed tuvo menos de 3 slides de contenido más
+      allá del hook (no debería pasar, el mínimo es 6 slides = hook + 3
+      contenido + Para asentar + CTA), usar los que haya.
+    - **Mismas fotos, mismo texto quemado, re-encuadradas a 9:16** en vez de
+      4:5 -- correr `generate_post_image.py` otra vez sobre el MISMO
+      `--source-image` de cada slide elegida, con el MISMO
+      `--headline-main`/`--headline-accent`/`--headline-extra`/
+      `--force-center-zone` (hook) o el MISMO `--body-text` (las demás),
+      cambiando solo `--aspect 9:16` y `--out-dir
+      "Desktop\Imagenes Posts\<slug>\historia"` (subcarpeta del carrusel,
+      no una carpeta nueva separada).
+    - **Única adaptación de texto permitida:** en la slide de CTA, cambiar
+      la frase final del bridge de "El link está en la descripción." a "El
+      link está en mi bio." -- Stories no tiene campo de descripción/caption,
+      así que esa instrucción sería literalmente falsa en ese formato. El
+      resto del bridge (el libro, el reencuadre) queda idéntico.
+    - **Armar el paquete** (mismo `build_paquete_docx.py`, sin
+      `--primer-comentario` -- Stories no tiene mecánica de primer
+      comentario, igual que no la tenía el formato viejo de
+      `historias-constelaciones`):
+      ```
+      python scripts/build_paquete_docx.py "<hook>" --copy-docx "<misma Caption.docx del paso 10>" --image "<ruta hook 9:16>" --image "<ruta contenido 1 9:16>" --image "<ruta contenido 2 9:16>" --image "<ruta contenido 3 9:16>" --image "<ruta Para asentar 9:16>" --image "<ruta CTA 9:16>" --tipo-pieza carrusel-historia --micronicho "<slug de micronicho>"
+      ```
+      La caption reusada aquí es solo de referencia dentro del paquete (qué
+      mensaje es este) -- Instagram/Facebook Stories no tiene un campo de
+      caption real, así que nadie la pega en ningún lado; el CTA que
+      importa ya está horneado en la última imagen.
 
 ## Reglas duras
 
@@ -273,10 +337,14 @@ se deriva del tema/hook al principio del flujo, mismo criterio que
 - **Ninguna slide usa `--flat-color`, incluido el CTA.** Las 6 slides
   siempre llevan `--source-image` con una foto real de Pexels y la misma
   coherencia de protagonista/ambiente que el resto del carrusel.
-- **Ninguna slide se genera sin `--headline-main`.** `--headline-extra` es
-  exclusivo del hook; `--body-text` es de toda slide después del hook,
-  incluido el CTA; nunca `--headline-extra` y `--body-text` en la misma
-  slide.
+- **Ninguna slide se genera sin texto que quemar, pero solo el hook lleva
+  `--headline-main`.** El hook siempre lleva `--headline-main` +
+  `--headline-accent` + `--headline-extra` + `--force-center-zone`; toda
+  slide después del hook (contenido, "Para asentar", CTA) lleva SOLO
+  `--body-text`, nunca `--headline-main`/`--headline-accent`/
+  `--headline-extra` -- el mini-título dorado por slide de contenido ya no
+  existe. `--force-center-zone` es exclusivo del hook; ninguna otra slide
+  lo usa, todas las demás siguen con el veto de OpenCV normal.
 - El estilo visual (`photo`, uno de los 4 ilustrados, o `mezcla`) es siempre
   elección explícita del usuario, nunca automática ni rotada.
 - `mezcla` es un estilo alternativo opt-in, actualmente sin usar desde que se
@@ -302,6 +370,13 @@ se deriva del tema/hook al principio del flujo, mismo criterio que
   comentario es nuevo (nunca copiar el bridge del CTA tal cual) y su libro
   se decide con la tabla tema -> libro, no siempre el mismo del bridge de la
   última slide — ver `PACKAGING_STANDARD` en `constelaciones_brand_voice.md`.
+- **La versión Historias (paso 17) nunca redacta copy nuevo ni busca fotos
+  nuevas.** Siempre las mismas 6 fotos/textos ya usados en el carrusel de
+  feed (hook + primeros 3 de contenido, en el orden ya publicado + Para
+  asentar + CTA), solo re-encuadrados a `--aspect 9:16`. La única palabra
+  que cambia en todo el paso es "descripción" -> "bio" en la última frase
+  del CTA -- nunca más que eso. Sin `--primer-comentario` en su paquete
+  (Stories no tiene esa mecánica).
 
 ## Recursos
 
@@ -317,8 +392,8 @@ se deriva del tema/hook al principio del flujo, mismo criterio que
   ilustrados si se usan.
 - `../../scripts/references/canva_title_style.md` — sección
   `CARROUSEL_BAKED_TYPOGRAPHY`: la tipografía automática de esta skill
-  (Poppins Bold + Playfair Display italic + los 3 niveles según tipo de
-  slide), distinta del spec manual de las otras 3 skills.
+  (título/subtítulo dorado exclusivo del hook, párrafo blanco cálido en
+  todas las demás slides), distinta del spec manual de las otras 3 skills.
 - `../../scripts/references/illustration_style.md` / `mixed_visual_style.md`
   — solo relevantes si se usa un estilo ilustrado o `mezcla`.
 - `../../scripts/search_pexels_photo.py` — busca y descarga las fotos;
@@ -326,8 +401,10 @@ se deriva del tema/hook al principio del flujo, mismo criterio que
   (Photos únicamente). Acepta `--only`, `--protagonist-id`/`--protagonist-name`.
 - `../../scripts/generate_post_image.py` — genera la imagen final de cada
   slide. `--source-image` para usar la foto de Pexels ya descargada en vez de
-  llamar a Gemini (las 6 slides, incluido el CTA), `--headline-main`/
-  `--headline-accent`/`--headline-extra`/`--body-text` para el texto quemado.
+  llamar a Gemini (las 6 slides, incluido el CTA). `--headline-main`/
+  `--headline-accent`/`--headline-extra`/`--force-center-zone` solo para el
+  hook; `--body-text` solo para las demás slides (nunca combinado con los
+  anteriores).
   `--flat-color` ya no se usa en esta skill salvo para una slide de
   `diagrama` dentro de `mezcla`.
 - `../../scripts/generate_diagram_image.py` — solo si se usa `mezcla` y hay
@@ -345,6 +422,11 @@ se deriva del tema/hook al principio del flujo, mismo criterio que
 - `Desktop/Constelaciones - Publicaciones/<fecha> <slug de micronicho>/Paquete
   2 - Carrusel/Carrusel Publicación/PAQUETE - <hook>.docx` — el paquete
   consolidado del paso 16.
+- `Desktop/Imagenes Posts/<slug>/historia/` — imágenes 9:16 de la versión
+  Historias (paso 17), subcarpeta del carrusel de feed.
+- `Desktop/Constelaciones - Publicaciones/<fecha> <slug de micronicho>/Paquete
+  2 - Carrusel/Carrusel Historias/PAQUETE - <hook>.docx` — el paquete
+  consolidado del paso 17.
 
 ## Related skills
 
@@ -353,4 +435,7 @@ se deriva del tema/hook al principio del flujo, mismo criterio que
   escrito a mano (sigue con Gemini).
 - `seleccion-clips-pexels` — mismo mecanismo de protagonista/cascada, para
   B-roll de reels en vez de slides de carrusel.
+- `historias-constelaciones` — sigue existiendo para una Story suelta con su
+  propio tema, sin carrusel de feed asociado; para el paquete diario, el
+  paso 17 de esta skill (Carrusel Historias) la reemplaza.
 - `ig-hashtag-strategist` (bundle público) — sizing de los 3 hashtags de tema.

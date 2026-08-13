@@ -63,6 +63,18 @@ Flat-color and mezcla-ilustracion slides have no protagonist at all, so the
 headline is centered with no face check. Omitting --headline-main leaves the
 image exactly as before this option existed -- no text, no opencv import.
 
+--force-center-zone skips the top/bottom face-veto entirely and always
+centers the headline block on the whole frame (zone="center"), even if that
+covers a face -- a deliberate exception used only by carrusel-constelaciones's
+hook slide (slide 1), never by any other caller. Every other slide (content,
+"Para asentar", CTA, and the other three skills) keeps the normal OpenCV
+veto unchanged.
+
+--body-text no longer requires --headline-main -- a content/CTA carousel
+slide can now bake body_text alone (no gold title/subtitle block at all).
+The per-slide gold title was dropped from carrusel-constelaciones's content
+slides; only the hook keeps one.
+
 The visual style (lighting, composition options, how metaphors get reinterpreted)
 for photography lives entirely in scripts/references/image_prompt_style.md,
 and for illustration in scripts/references/illustration_style.md -- edit
@@ -186,11 +198,16 @@ HEADLINE_MAIN_COLOR = (242, 169, 0)  # #F2A900
 HEADLINE_ACCENT_COLOR = (250, 232, 168)  # #FAE8A8
 HEADLINE_EXTRA_COLOR = HEADLINE_ACCENT_COLOR  # same pale gold
 # --body-text (content slides 2-5 only): the longer 2-4 sentence microdolor
-# copy, baked separately from the gold title/subtitle -- same cyan as the
-# reel subtitles (SUBTITLE_WORD_COLOR in render_reel_json2video.py), same
-# Poppins Bold weight too. Never combined with --headline-extra on the same
-# slide (hook vs. content slides are mutually exclusive callers).
-BODY_TEXT_COLOR = (34, 211, 238)  # #22D3EE
+# copy, baked separately from the gold title/subtitle -- warm white, same
+# Poppins Bold weight as before. Was cyan #22D3EE (matched the old reel
+# subtitle color); switched to white per user feedback. Compared pure white
+# (#FFFFFF) against this warm white on a real rendered slide -- both had
+# equally strong contrast against the dark gradient scrim, but the warm
+# white sits more cohesively against the brand's warm cinematic photo tones
+# (browns, warm skin tones) instead of reading slightly cold/clinical like
+# pure white did. Never combined with --headline-extra on the same slide
+# (hook vs. content slides are mutually exclusive callers).
+BODY_TEXT_COLOR = (245, 240, 230)  # warm white
 # Solid outline behind the headline, same rationale as HOOK_MAIN_STROKE_* in
 # render_reel_json2video.py: keeps contrast when the zone lands on a bright
 # patch of the photo (a window, a light wall) -- applied to every block here
@@ -352,7 +369,14 @@ def resolve_headline_zone(
     generic third. Always returns a usable zone: if both bands show a face,
     defaults to "top" anyway with a warning rather than skipping the
     headline entirely -- every generated image gets baked text, never a
-    silent gap."""
+    silent gap.
+
+    NOT used for the carousel hook (slide 1) -- that slide forces
+    zone="center" directly via --force-center-zone and never calls this
+    function, per the deliberate "title always centered, face or no face"
+    exception documented in constelaciones_brand_voice.md. Every other
+    caller (content/CTA slides, the other three skills) keeps this face-veto
+    cascade unchanged."""
     if preferred_zone in ("top", "bottom"):
         return preferred_zone
     if not _zone_has_face(image, "top", band_fraction):
@@ -408,30 +432,43 @@ def apply_gradient_scrim(image: "Image.Image") -> "Image.Image":
 def _build_text_blocks(
     draw: "ImageDraw.ImageDraw",
     width: int,
-    headline_main: str,
+    headline_main: Optional[str] = None,
     headline_accent: Optional[str] = None,
     headline_extra: Optional[str] = None,
     body_text: Optional[str] = None,
 ) -> tuple:
-    """Wrap headline_main (+ optional accent/extra/body_text) into the same
-    line/font/color blocks render_headline draws, and return (blocks,
-    total_block_height). Split out from render_headline so the real pixel
-    height this specific text needs can be measured BEFORE picking a zone --
-    a long body_text paragraph can need more room than the fixed
-    BODY_BAND_FRACTION reserves, see compute_band_fraction."""
-    max_text_width = round(width * 0.86)
+    """Wrap whichever of headline_main/accent/extra/body_text were given into
+    the same line/font/color blocks render_headline draws, and return
+    (blocks, total_block_height). Split out from render_headline so the real
+    pixel height this specific text needs can be measured BEFORE picking a
+    zone -- a long body_text paragraph can need more room than the fixed
+    BODY_BAND_FRACTION reserves, see compute_band_fraction.
 
-    main_path = _download_font(HEADLINE_MAIN_FONT_URL, FONT_CACHE_DIR / "Poppins-Bold.ttf")
-    main_size = max(round(width * 0.075), 40)
-    main_font = ImageFont.truetype(str(main_path), main_size)
-    main_lines = _wrap_text(draw, headline_main.upper(), main_font, max_text_width)
-    blocks = [
-        {
-            "lines": main_lines, "font": main_font,
-            "line_height": round(main_size * 1.15), "color": HEADLINE_MAIN_COLOR,
-            "stroke_width": max(round(main_size * 0.035), 2),
-        }
-    ]
+    headline_main is optional (not just headline_accent/extra) so a
+    content/CTA carousel slide can bake body_text alone, no gold title/
+    subtitle block at all -- the carousel's title-per-slide look was
+    dropped in favor of one title only, on the hook, per user feedback."""
+    max_text_width = round(width * 0.86)
+    blocks = []
+
+    # Poppins Bold is shared by the main headline AND body_text (see below),
+    # so it must download whenever either one is present, even if
+    # headline_main itself is absent.
+    main_path = None
+    if headline_main or body_text:
+        main_path = _download_font(HEADLINE_MAIN_FONT_URL, FONT_CACHE_DIR / "Poppins-Bold.ttf")
+
+    if headline_main:
+        main_size = max(round(width * 0.075), 40)
+        main_font = ImageFont.truetype(str(main_path), main_size)
+        main_lines = _wrap_text(draw, headline_main.upper(), main_font, max_text_width)
+        blocks.append(
+            {
+                "lines": main_lines, "font": main_font,
+                "line_height": round(main_size * 1.15), "color": HEADLINE_MAIN_COLOR,
+                "stroke_width": max(round(main_size * 0.035), 2),
+            }
+        )
 
     if headline_accent:
         accent_path = _download_font(
@@ -479,7 +516,7 @@ def _build_text_blocks(
 def compute_band_fraction(
     width: int,
     height: int,
-    headline_main: str,
+    headline_main: Optional[str] = None,
     headline_accent: Optional[str] = None,
     headline_extra: Optional[str] = None,
     body_text: Optional[str] = None,
@@ -508,22 +545,27 @@ def compute_band_fraction(
 def render_headline(
     image: "Image.Image",
     zone: str,
-    headline_main: str,
+    headline_main: Optional[str] = None,
     headline_accent: Optional[str] = None,
     headline_extra: Optional[str] = None,
     body_text: Optional[str] = None,
     band_fraction: Optional[float] = None,
 ) -> "Image.Image":
-    """Bake headline_main (+ optional headline_accent, and EITHER
-    headline_extra OR body_text, never both) onto image, centered within the
-    given zone ("top"/"bottom" = that band of the frame, sized by
-    band_fraction -- "center" = the whole canvas, used for flat-color quote
-    cards where the text IS the entire design). body_text also gets a
-    full-frame gradient scrim behind every block (see apply_gradient_scrim).
-    band_fraction should be whatever compute_band_fraction returned for this
-    same text -- callers that skip it (band_fraction=None) get it computed
-    here as a fallback, but then resolve_headline_zone's earlier face check
-    may have used a different, unmatched fraction."""
+    """Bake whichever of headline_main (+ optional headline_accent, and
+    EITHER headline_extra OR body_text, never both) were given onto image,
+    centered within the given zone ("top"/"bottom" = that band pinned to the
+    matching edge of the frame, sized by band_fraction -- "center" = the
+    whole canvas, used for flat-color quote cards AND for the carousel hook,
+    which forces this zone deliberately regardless of face position, see
+    resolve_headline_zone). headline_main is optional -- a content/CTA
+    carousel slide passes body_text alone, with no title/subtitle block at
+    all (the per-slide gold title was dropped; only the hook keeps one).
+    body_text also gets a full-frame gradient scrim behind every block (see
+    apply_gradient_scrim). band_fraction should be whatever
+    compute_band_fraction returned for this same text -- callers that skip
+    it (band_fraction=None) get it computed here as a fallback, but then
+    resolve_headline_zone's earlier face check may have used a different,
+    unmatched fraction."""
     image = image.copy()
     if body_text:
         image = apply_gradient_scrim(image)
@@ -541,7 +583,7 @@ def render_headline(
         band_top, band_bottom = 0, round(height * band_fraction)
     elif zone == "bottom":
         band_top, band_bottom = height - round(height * band_fraction), height
-    else:  # "center" -- flat-color quote cards, text is the whole design
+    else:  # "center" -- flat-color quote cards AND the carousel hook
         band_top, band_bottom = 0, height
     y = (band_top + band_bottom) / 2 - block_height / 2
 
@@ -1054,11 +1096,21 @@ def main() -> int:
     parser.add_argument(
         "--body-text",
         default=None,
-        help="Párrafo largo (2-4 oraciones) a quemar en cian #22D3EE Poppins "
+        help="Párrafo largo (2-4 oraciones) a quemar en blanco cálido Poppins "
         "Bold, con un degradado oscuro de fondo para legibilidad (mismos "
-        "stops que el degradado de reels). Solo para slides de contenido de "
-        "carrusel-constelaciones. Requiere --headline-main. Incompatible con "
-        "--headline-extra.",
+        "stops que el degradado de reels). Solo para slides de contenido/CTA "
+        "de carrusel-constelaciones -- NO lleva título dorado ni subtítulo "
+        "cursiva (eso quedó exclusivo del hook); se puede pasar solo, sin "
+        "--headline-main. Incompatible con --headline-extra.",
+    )
+    parser.add_argument(
+        "--force-center-zone",
+        action="store_true",
+        help="Fuerza zone='center' (centrado vertical simple en todo el "
+        "cuadro) para el titular, SIN correr el veto de OpenCV -- ignora si "
+        "el bloque tapa un rostro. Excepción deliberada, exclusiva del hook "
+        "de carrusel-constelaciones (ver PACKAGING_STANDARD / "
+        "constelaciones_brand_voice.md); ninguna otra slide ni skill la usa.",
     )
     args = parser.parse_args()
     if args.headline_accent and not args.headline_main:
@@ -1066,9 +1118,6 @@ def main() -> int:
         return 1
     if args.headline_extra and not args.headline_main:
         print("--headline-extra requiere --headline-main.", file=sys.stderr)
-        return 1
-    if args.body_text and not args.headline_main:
-        print("--body-text requiere --headline-main.", file=sys.stderr)
         return 1
     if args.headline_extra and args.body_text:
         print("--headline-extra y --body-text son incompatibles entre si.", file=sys.stderr)
@@ -1096,7 +1145,7 @@ def main() -> int:
             color = select_brand_color(args.flat_color, style["brand_colors"])
             print(f"Generando fondo de color (sin Gemini, sin API key): {color['label']}")
             image = render_flat_color_image(color, output_size)
-            if args.headline_main:
+            if args.headline_main or args.body_text:
                 image = render_headline(
                     image, "center", args.headline_main, args.headline_accent,
                     args.headline_extra, args.body_text,
@@ -1112,13 +1161,17 @@ def main() -> int:
             print(f"Usando imagen existente (sin Gemini, sin API key): {src_path.name}")
             image = Image.open(src_path).convert("RGB")
             image = cover_resize(image, output_size)
-            if args.headline_main:
+            if args.headline_main or args.body_text:
                 band_fraction = compute_band_fraction(
                     output_size[0], output_size[1], args.headline_main,
                     args.headline_accent, args.headline_extra, args.body_text,
                 )
-                zone = resolve_headline_zone("auto", image, band_fraction)
-                print(f"  Zona del titular: {zone}")
+                if args.force_center_zone:
+                    zone = "center"
+                    print("  Zona del titular: center (forzada con --force-center-zone, sin veto de rostro)")
+                else:
+                    zone = resolve_headline_zone("auto", image, band_fraction)
+                    print(f"  Zona del titular: {zone}")
                 image = render_headline(
                     image, zone, args.headline_main, args.headline_accent,
                     args.headline_extra, args.body_text, band_fraction,
@@ -1182,13 +1235,17 @@ def main() -> int:
         if image.size != output_size:
             image = image.resize(output_size, Image.LANCZOS)
 
-        if args.headline_main:
+        if args.headline_main or args.body_text:
             band_fraction = compute_band_fraction(
                 output_size[0], output_size[1], args.headline_main,
                 args.headline_accent, args.headline_extra, args.body_text,
             )
-            zone = resolve_headline_zone(headline_zone, image, band_fraction)
-            print(f"  Zona del titular: {zone}")
+            if args.force_center_zone:
+                zone = "center"
+                print("  Zona del titular: center (forzada con --force-center-zone, sin veto de rostro)")
+            else:
+                zone = resolve_headline_zone(headline_zone, image, band_fraction)
+                print(f"  Zona del titular: {zone}")
             image = render_headline(
                 image, zone, args.headline_main, args.headline_accent,
                 args.headline_extra, args.body_text, band_fraction,
