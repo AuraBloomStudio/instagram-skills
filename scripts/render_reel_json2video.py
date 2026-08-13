@@ -56,6 +56,7 @@ import re
 import subprocess
 import sys
 import time
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -891,8 +892,19 @@ def main() -> int:
                     )
 
         print("Subiendo assets a JSON2Video...")
+        # Unique per-run token in every uploaded asset name -- diagnosing a
+        # reproducible broken-subtitle render on "confidente-mama-nina"
+        # (identical garbled Whisper output on two consecutive renders of
+        # otherwise-different audio bytes) pointed at JSON2Video possibly
+        # caching transcription/media results keyed by asset name, since
+        # this script always reused the exact same fixed name
+        # (f"{reel_slug}_narracion.mp3") across every render of a given
+        # reel. A fresh name per run rules that out and, independent of
+        # whether that turns out to be the cause, avoids any cross-run name
+        # collision in JSON2Video's media library entirely.
+        run_token = uuid.uuid4().hex[:8]
         narration_ext = narration_path.suffix.lower()
-        narration_name = f"{args.reel_slug}_narracion{narration_ext}"
+        narration_name = f"{args.reel_slug}_{run_token}_narracion{narration_ext}"
         narration_url = upload_asset(narration_path, narration_name, api_key)
         uploaded_names.append(narration_name)
 
@@ -916,13 +928,13 @@ def main() -> int:
             print("  (sin musica de fondo -- no se paso --music y no existe la pista de marca por defecto)")
 
         if music_path is not None:
-            music_name = f"{args.reel_slug}_musica{music_path.suffix.lower()}"
+            music_name = f"{args.reel_slug}_{run_token}_musica{music_path.suffix.lower()}"
             music_url = upload_asset(music_path, music_name, api_key)
             uploaded_names.append(music_name)
 
         hook_clip_url = None
         if hook_clip_path is not None:
-            hook_dest_name = f"{args.reel_slug}_gancho_{hook_clip_path.name}"
+            hook_dest_name = f"{args.reel_slug}_{run_token}_gancho_{hook_clip_path.name}"
             hook_clip_url = upload_asset(hook_clip_path, hook_dest_name, api_key)
             uploaded_names.append(hook_dest_name)
 
@@ -930,7 +942,7 @@ def main() -> int:
         first_clip_url = None
         first_clip_duration = None
         for i, ((m, path, is_photo, clip_duration), target) in enumerate(zip(selected, targets)):
-            dest_name = f"{args.reel_slug}_{path.name}"
+            dest_name = f"{args.reel_slug}_{run_token}_{path.name}"
             clip_url = upload_asset(path, dest_name, api_key)
             uploaded_names.append(dest_name)
             if i == 0:

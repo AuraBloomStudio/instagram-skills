@@ -11,11 +11,16 @@ Flow:
      voice (the brand's one official narration voice -- never chosen per
      call) and a style instruction asking for the calm, warm, reflective
      pacing of the brand's "tu" voice.
-  4. Wrap each chunk's raw PCM response in a WAV header, trim off any
-     anomalous trailing silence (Gemini TTS occasionally pads its response
-     with minutes of near-silence after the real narration ends), then
-     concatenate all chunks with ffmpeg (short silence between them so joins
-     don't sound abrupt) and encode the final result as MP3.
+  4. Wrap each chunk's raw PCM response in a WAV header. Check the opening
+     seconds for a duplicated opening (Gemini TTS occasionally narrates a
+     chunk's first sentence(s) twice -- once truncated, then again in full --
+     before continuing normally; confirmed on real reels), regenerating the
+     chunk from scratch (up to MAX_CHUNK_GENERATION_ATTEMPTS times) instead of
+     accepting it. Then trim off any anomalous trailing silence (Gemini TTS
+     occasionally pads its response with minutes of near-silence after the
+     real narration ends), then concatenate all chunks with ffmpeg (short
+     silence between them so joins don't sound abrupt) and encode the final
+     result as MP3.
   5. Save to scripts/output_audio/<reel_slug>/narracion.mp3.
 
 GEMINI_API_KEY is never hardcoded. If it is not already set as an
@@ -36,6 +41,7 @@ import re
 import subprocess
 import sys
 import time
+import unicodedata
 import wave
 from pathlib import Path
 from typing import Optional
@@ -104,6 +110,38 @@ TRAILING_SILENCE_SAFETY_MARGIN_S = 0.6
 # chunk, assume detection mistook real content for padding and keep the
 # original instead of risking a truncated narration.
 MAX_TRIM_FRACTION = 0.85
+
+# Gemini TTS has also been observed to "false start" on a chunk's OPENING
+# instead of (or in addition to) padding its tail: it narrates the first
+# sentence(s) once -- sometimes truncated -- then restarts and narrates the
+# same opening again in full, before continuing normally into the rest of
+# the chunk. Both takes land in the same PCM response with no marker between
+# them (confirmed on two real reels: "confidente-mama" and
+# "confidente-mama-nina", both single-chunk scripts under
+# CHUNK_SPLIT_THRESHOLD_WORDS, so this is a Gemini TTS quirk within one API
+# call, not a bug in how chunks get split or concatenated). Unlike the
+# trailing-silence pad, the two takes differ in wording/length (one
+# truncated, one complete), so they can't be told apart by silence
+# detection or waveform matching -- only by checking what was actually said,
+# hence the transcription-based check below instead of an audio-only one.
+DUPLICATE_OPENING_CHECK_MODEL = os.getenv("OPENING_CHECK_WHISPER_MODEL", "small")
+# Every false start observed so far fully resolved (both takes done, real
+# narration underway) well inside 25s, even for the longer of the two takes
+# seen -- generous margin without transcribing the whole chunk every time.
+DUPLICATE_OPENING_CHECK_WINDOW_S = 25.0
+# How many leading words of the chunk's first sentence make up the
+# "signature" phrase to search for twice in the transcribed opening. Short
+# enough to survive one take being truncated, long enough to not false-match
+# on a coincidental short phrase repeated in normal speech.
+DUPLICATE_OPENING_SIGNATURE_WORDS = 5
+# A signature shorter than this (very short opening sentence) isn't specific
+# enough to check reliably -- skip the check rather than risk a false
+# positive that would burn a retry for nothing.
+DUPLICATE_OPENING_MIN_SIGNATURE_WORDS = 3
+# Regenerate a chunk this many times before giving up -- mirrors
+# _post_with_retry's bounded-retry pattern instead of looping forever if
+# Gemini keeps false-starting the same chunk.
+MAX_CHUNK_GENERATION_ATTEMPTS = 3
 
 
 class GenerationError(RuntimeError):
@@ -321,6 +359,71 @@ def trim_trailing_silence(wav_path: Path) -> None:
     trimmed_path.replace(wav_path)
 
 
+_opening_check_model = None
+
+
+def _get_opening_check_model():
+    """Lazily load (once per process) and cache the small local Whisper model
+    used only to check for a duplicated opening -- loading it per chunk would
+    make every retry pay the model-load cost again."""
+    global _opening_check_model
+    if _opening_check_model is None:
+        from faster_whisper import WhisperModel
+        _opening_check_model = WhisperModel(
+            DUPLICATE_OPENING_CHECK_MODEL, device="cpu", compute_type="int8"
+        )
+    return _opening_check_model
+
+
+def _normalize_for_match(text: str) -> str:
+    """Lowercase, strip accents/punctuation, collapse whitespace -- so a
+    same-word match isn't missed over a capitalization or accent difference
+    between Whisper's transcription and the original guion text."""
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    text = text.lower()
+    text = re.sub(r"[^a-z0-9\s]", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def detect_duplicated_opening(chunk_wav: Path, chunk_text: str) -> bool:
+    """Return True if the opening words of `chunk_text` were spoken twice near
+    the start of `chunk_wav` -- the Gemini TTS false-start quirk described
+    above DUPLICATE_OPENING_CHECK_MODEL. Transcribes only the first
+    DUPLICATE_OPENING_CHECK_WINDOW_S seconds (not the whole chunk) with a
+    local Whisper model, then checks whether the chunk's own opening
+    "signature" phrase shows up twice in that transcript. Never raises --
+    a failure in the check itself (ffmpeg trim, model load, transcription)
+    is treated as "no duplicate detected" so a broken check can't block an
+    otherwise-good render."""
+    first_sentence = _SENTENCE_SPLIT_RE.split(chunk_text.strip(), maxsplit=1)[0]
+    signature_words = first_sentence.split()[:DUPLICATE_OPENING_SIGNATURE_WORDS]
+    if len(signature_words) < DUPLICATE_OPENING_MIN_SIGNATURE_WORDS:
+        return False
+    signature = _normalize_for_match(" ".join(signature_words))
+
+    opening_clip = chunk_wav.with_name(chunk_wav.stem + "_opening_check.wav")
+    cmd = [
+        "ffmpeg", "-y", "-i", str(chunk_wav),
+        "-t", str(DUPLICATE_OPENING_CHECK_WINDOW_S), str(opening_clip),
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        opening_clip.unlink(missing_ok=True)
+        return False
+
+    try:
+        model = _get_opening_check_model()
+        segments, _ = model.transcribe(str(opening_clip), language="es", vad_filter=False)
+        transcript = _normalize_for_match(" ".join(seg.text for seg in segments))
+    except Exception:
+        return False
+    finally:
+        opening_clip.unlink(missing_ok=True)
+
+    return transcript.count(signature) >= 2
+
+
 def concat_and_encode_mp3(wav_paths: list, out_path: Path) -> None:
     """Concatenate wav_paths (already interleaved with silence clips) via
     ffmpeg's concat demuxer, then encode straight to the final MP3."""
@@ -384,10 +487,22 @@ def main() -> int:
 
         wav_sequence = []
         for i, chunk in enumerate(chunks, start=1):
-            print(f"Generando audio del fragmento {i}/{len(chunks)} con voz '{BRAND_VOICE}'...")
-            pcm_bytes = generate_tts_audio(chunk, api_key)
             chunk_wav = tmp_dir / f"chunk_{i:02d}.wav"
-            pcm_to_wav(pcm_bytes, chunk_wav)
+            for attempt in range(1, MAX_CHUNK_GENERATION_ATTEMPTS + 1):
+                print(f"Generando audio del fragmento {i}/{len(chunks)} con voz '{BRAND_VOICE}'"
+                      + (f" (intento {attempt}/{MAX_CHUNK_GENERATION_ATTEMPTS})" if attempt > 1 else "") + "...")
+                pcm_bytes = generate_tts_audio(chunk, api_key)
+                pcm_to_wav(pcm_bytes, chunk_wav)
+                if not detect_duplicated_opening(chunk_wav, chunk):
+                    break
+                print(f"    Arranque duplicado detectado en el fragmento {i} (Gemini narro la "
+                      "apertura dos veces) -- descartando esta toma y regenerando.")
+                if attempt == MAX_CHUNK_GENERATION_ATTEMPTS:
+                    raise GenerationError(
+                        f"Gemini TTS repitio la apertura del fragmento {i} "
+                        f"{MAX_CHUNK_GENERATION_ATTEMPTS} veces seguidas -- abortando en vez de "
+                        "publicar una narracion con la frase inicial duplicada."
+                    )
             trim_trailing_silence(chunk_wav)
             wav_sequence.append(chunk_wav)
             if i < len(chunks):
