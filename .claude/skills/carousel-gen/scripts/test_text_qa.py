@@ -270,16 +270,14 @@ def test_25_mezcla_de_error_real_y_ruido_ocr_prioriza_el_error_real():
                        "sigue CRITICAL por la palabra ausente (el ruido no la enmascara)", ok, r.detail)
 
 
-def test_26_fragmentacion_de_bloque_ocr_se_tolera():
-    # Caso real de produccion (2026-09-18, bundle umbral-dolor-nina): Tesseract recibe
-    # un bloque de 6 tokens esperados y produce 2 tokens garbled. La distancia de edicion
-    # de los strings juntados supera el umbral normal (24 >> 8), pero cada token
-    # renderizado es identificable como una lectura corrupta de algun token esperado:
-    #   'problenas' <- 'problemas' (1 edicion, s->n)
-    #   'cmportantes' <- 'importantes' (1 edicion, i->c)
-    # Clasificar esto como TEXT_CORRUPTION/CRITICAL y gastar 1 retry es INCORRECTO —
-    # debe ser OCR_LIKELY_MISREAD/UNCERTAIN (aprueba sin retry).
-    ok_heuristic = _looks_like_ocr_misread(
+def test_26_perdida_de_palabras_en_una_lectura_no_se_tolera():
+    # REGLA CAMBIADA 2026-09-26 (ver SKILL.md "CONFIGURACIÓN FIJA" / TEXT QA): antes, una
+    # sola lectura "6 palabras -> 2 parecidas" se aprobaba como ruido de OCR. Eso tambien
+    # aprobaba perdidas REALES confirmadas visualmente ("nina no podias" -> "nifia pdas").
+    # Ahora, dentro de UNA lectura, leer menos palabras (sin ser simple fusion) es
+    # MISSING_TOKEN. Si la imagen era correcta, lo corrige la lectura OCR alternativa de
+    # run_text_qa (ver test_regen_rule.py con imagenes reales), nunca se aprueba a ciegas.
+    ok_heuristic = not _looks_like_ocr_misread(
         ['problemas', 'considerados', 'mas', 'importantes', 'y', 'silencios'],
         ['problenas', 'cmportantes'],
     )
@@ -287,9 +285,9 @@ def test_26_fragmentacion_de_bloque_ocr_se_tolera():
         "problemas considerados mas importantes y silencios",
         "problenas cmportantes",
     )
-    ok_compare = r.approved is True and r.severity == "UNCERTAIN" and r.reason == REASON_OCR_LIKELY_MISREAD
-    report("TEST 26", "Fragmentacion de bloque OCR (6 tokens -> 2 garbled, caso real umbral-dolor-nina) "
-                       "se tolera: heuristico True, compare_text aprueba UNCERTAIN",
+    ok_compare = r.approved is False and r.severity == "CRITICAL" and r.reason == "MISSING_TOKEN"
+    report("TEST 26", "Perdida de palabras en una lectura (6 tokens -> 2) ya NO se aprueba como "
+                       "ruido: heuristico False, compare_text MISSING_TOKEN/CRITICAL",
            ok_heuristic and ok_compare,
            f"heuristic={ok_heuristic} approved={r.approved} severity={r.severity} reason={r.reason} detail={r.detail}")
 
@@ -549,7 +547,7 @@ def main():
         test_23_text_corruption_sola_siempre_uncertain,
         test_24_palabra_completamente_ausente_nunca_se_tolera,
         test_25_mezcla_de_error_real_y_ruido_ocr_prioriza_el_error_real,
-        test_26_fragmentacion_de_bloque_ocr_se_tolera,
+        test_26_perdida_de_palabras_en_una_lectura_no_se_tolera,
         test_27_fragmentacion_inventada_no_se_tolera,
         test_15_distribucion_extrema, test_16_redistribucion_cobertura,
         test_12_solo_slide_fallido_regenera, test_13_rerun_identico_cero_generaciones,

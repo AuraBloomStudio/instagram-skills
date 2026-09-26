@@ -18,7 +18,7 @@ import zlib
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from gemini_config import GeminiConfig
+from gemini_config import GeminiConfig, GEMINI_REQUEST_TIMEOUT_SECONDS
 
 
 @dataclass
@@ -44,7 +44,12 @@ class GeminiClient:
         from google.genai import types
         self._genai = genai
         self._types = types
-        self._client = genai.Client(api_key=config.api_key)
+        # Tiempo maximo por llamada (HttpOptions.timeout va en milisegundos): una llamada
+        # colgada lanza excepcion -> GeminiImageResult(success=False) -> consume un intento.
+        self._client = genai.Client(
+            api_key=config.api_key,
+            http_options=types.HttpOptions(timeout=GEMINI_REQUEST_TIMEOUT_SECONDS * 1000),
+        )
         self.config = config
 
     def _build_contents(self, prompt: str, reference_images: List[bytes]) -> list:

@@ -172,19 +172,28 @@ def test_1_pipeline_completo_produce_todos_los_archivos():
         )
 
         image_exists = (bundle_path / "carousel" / "carousel-01.png").exists()
-        copy_exists = (bundle_path / "COPY_FINAL.txt").exists()
+        copy_names = ("COPY_FINAL.txt", "DESCRIPCION.txt", "CTA.txt", "HASHTAGS.txt")
+        copy_exists = (all((bundle_path / "copy" / n).exists() for n in copy_names)
+                       and not (bundle_path / "COPY_FINAL.txt").exists())
         costo_exists = (bundle_path / "COSTO_CARRUSEL.txt").exists()
         manifest_exists = (bundle_path / "carousel" / "manifest.json").exists()
         result_json_exists = (bundle_path / "pipeline_result.json").exists()
+        # Archivo local (Descargas) con la misma estructura: carousel/ + copy/ + brief + COSTO
+        archive_ok = ((downloads_dir / "carousel" / "carousel-01.png").exists()
+                      and all((downloads_dir / "copy" / n).exists() for n in copy_names)
+                      and (downloads_dir / "brief.json").exists()
+                      and (downloads_dir / "COSTO_CARRUSEL.txt").exists()
+                      and result.get("files") == ["carousel-01.png"])
 
-        ok = rc == 0 and image_exists and copy_exists and costo_exists and manifest_exists and result_json_exists
+        ok = (rc == 0 and image_exists and copy_exists and costo_exists and manifest_exists
+              and result_json_exists and archive_ok)
         report(
             "TEST 1",
-            "Pipeline completo (--fake-provider) produce: imagen + COPY_FINAL.txt + COSTO_CARRUSEL.txt "
-            "+ manifest.json + pipeline_result.json",
+            "Pipeline completo (--fake-provider) produce: imagen + copy/ (4 archivos) + COSTO_CARRUSEL.txt "
+            "+ manifest.json + pipeline_result.json, y el archivo local replica carousel/ + copy/",
             ok,
             f"rc={rc} imagen={image_exists} copy={copy_exists} costo={costo_exists} "
-            f"manifest={manifest_exists} pipeline_result={result_json_exists}",
+            f"manifest={manifest_exists} pipeline_result={result_json_exists} archivo={archive_ok}",
         )
     finally:
         shutil.rmtree(bundle_path, ignore_errors=True)

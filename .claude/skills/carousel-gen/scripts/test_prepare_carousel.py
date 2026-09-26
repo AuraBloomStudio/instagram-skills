@@ -18,6 +18,7 @@ NO ejecuta Gemini real ni genera imágenes.
 """
 
 import contextlib
+import hashlib
 import io
 import json
 import shutil
@@ -29,12 +30,17 @@ import time
 import tempfile
 import zlib
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from carousel_common import OUTPUTS_DIR, REQUIRED_SLIDE_FIELDS  # noqa: E402
+from carousel_common import (  # noqa: E402
+    OUTPUTS_DIR, REQUIRED_SLIDE_FIELDS,
+    FIXED_CAROUSEL_TYPE, FIXED_PRODUCT_NAME, FIXED_PURCHASE_URL,
+)
+import prepare_carousel  # noqa: E402
 from prepare_carousel import (  # noqa: E402
+    PRODUCTS_JSON,
     compute_slide_fields,
     validate_brief_in_memory,
     build_brief,
@@ -67,8 +73,10 @@ def _tiny_png() -> bytes:
     return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", idat) + chunk(b"IEND", b"")
 
 
-def _make_slide_decision(number: int, exact_text: str = "Texto del slide", text_placement: str = "lower_third_centered") -> Dict:
+def _make_slide_decision(number: int, exact_text: Optional[str] = None, text_placement: str = "lower_third_centered") -> Dict:
     """Slide con los 16 campos que Claude proporciona (sin los 5 computados)."""
+    if exact_text is None:
+        exact_text = f"Texto del slide {number}"
     return {
         "number": number,
         "role": f"slide-{number}",
@@ -89,7 +97,7 @@ def _make_slide_decision(number: int, exact_text: str = "Texto del slide", text_
     }
 
 
-def _make_decisions(bundle_id: str, n_slides: int = 3, source_text: str = "Texto fuente completo del post viral") -> Dict:
+def _make_decisions(bundle_id: str, n_slides: int = 10, source_text: str = "Texto fuente completo del post viral") -> Dict:
     return {
         "bundle_id": bundle_id,
         "source_text": source_text,
@@ -401,7 +409,7 @@ def test_8_campo_faltante_rechazado():
     tmp = Path(tempfile.mkdtemp(prefix="test_prepare_validate_"))
     try:
         # Brief con slide correcto → OK
-        decisions_ok = _make_decisions("__test-validate-ok__", n_slides=1)
+        decisions_ok = _make_decisions("__test-validate-ok__")
         bundle_path_ok = tmp / "__test-validate-ok__"
         bundle_path_ok.mkdir()
         (bundle_path_ok / "carousel" / "assets").mkdir(parents=True)
@@ -409,7 +417,7 @@ def test_8_campo_faltante_rechazado():
         errors_ok = validate_brief_in_memory(brief_ok)
 
         # Brief con campo faltante → FAIL
-        decisions_bad = _make_decisions("__test-validate-bad__", n_slides=1)
+        decisions_bad = _make_decisions("__test-validate-bad__")
         del decisions_bad["slides"][0]["role"]  # Eliminar campo requerido
         bundle_path_bad = tmp / "__test-validate-bad__"
         bundle_path_bad.mkdir()
@@ -448,15 +456,15 @@ def test_9_concurrencia_bundles_separados():
     results_concurrent: List[Dict] = []
     lock = threading.Lock()
 
-    def run_one(bundle_id: str, n_slides: int) -> None:
-        decisions = _make_decisions(bundle_id, n_slides=n_slides)
+    def run_one(bundle_id: str, source_text: str) -> None:
+        decisions = _make_decisions(bundle_id, source_text=source_text)
         proc = _run_prepare(decisions, fake_ref_path=fake_ref.name)
         with lock:
             results_concurrent.append({"bundle_id": bundle_id, "rc": proc.returncode})
 
     try:
-        t_a = threading.Thread(target=run_one, args=(bundle_a, 3))
-        t_b = threading.Thread(target=run_one, args=(bundle_b, 5))
+        t_a = threading.Thread(target=run_one, args=(bundle_a, "Texto fuente A"))
+        t_b = threading.Thread(target=run_one, args=(bundle_b, "Texto fuente B"))
         t_a.start()
         t_b.start()
         t_a.join(timeout=60)
@@ -465,15 +473,19 @@ def test_9_concurrencia_bundles_separados():
         both_ok = all(r["rc"] == 0 for r in results_concurrent)
         a_brief = bundle_path_a / "brief.json"
         b_brief = bundle_path_b / "brief.json"
-        a_slides = len(json.loads(a_brief.read_text()).get("slides", [])) if a_brief.exists() else 0
-        b_slides = len(json.loads(b_brief.read_text()).get("slides", [])) if b_brief.exists() else 0
-        # Cada bundle tiene sus propios slides, sin mezclar
-        slides_ok = a_slides == 3 and b_slides == 5
+        a_data = json.loads(a_brief.read_text(encoding="utf-8")) if a_brief.exists() else {}
+        b_data = json.loads(b_brief.read_text(encoding="utf-8")) if b_brief.exists() else {}
+        a_slides = len(a_data.get("slides", []))
+        b_slides = len(b_data.get("slides", []))
+        # Cada bundle tiene su propio contenido, sin mezclar
+        slides_ok = (a_slides == 10 and b_slides == 10
+                     and a_data.get("source_text") == "Texto fuente A"
+                     and b_data.get("source_text") == "Texto fuente B")
         ok = both_ok and slides_ok
         report(
             "TEST 9",
             "Dos prepare_carousel simultáneos con bundle_ids distintos no colisionan "
-            "(slides_A=3 y slides_B=5 correctos en cada bundle)",
+            "(cada bundle conserva su propio source_text y sus 10 slides)",
             ok,
             f"rcs={[r['rc'] for r in results_concurrent]} slides_A={a_slides} slides_B={b_slides}",
         )
@@ -553,6 +565,147 @@ def test_10_reduccion_tool_calls():
 
 
 # ============================================================
+# TESTS 11-17 — CONFIGURACION FIJA (ver SKILL.md "CONFIGURACION FIJA")
+# ============================================================
+
+def _run_prepare_expect_stop(bundle_id: str, decisions: Dict) -> subprocess.CompletedProcess:
+    fake_ref = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+    fake_ref.write(_tiny_png())
+    fake_ref.close()
+    try:
+        return _run_prepare(decisions, fake_ref_path=fake_ref.name)
+    finally:
+        shutil.rmtree(OUTPUTS_DIR / bundle_id, ignore_errors=True)
+        Path(fake_ref.name).unlink(missing_ok=True)
+
+
+def test_11_config_fija_impuesta():
+    """Formato, producto y enlace se imponen aunque claude_decisions traiga otros."""
+    bundle_id = "__test-prepare-fixed-config__"
+    bundle_path = OUTPUTS_DIR / bundle_id
+    fake_ref = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+    fake_ref.write(_tiny_png())
+    fake_ref.close()
+    try:
+        decisions = _make_decisions(bundle_id)
+        decisions["carousel_type"] = "meme_cartoon"
+        decisions["product"] = {"product_name": "Otro", "purchase_url": "https://otro.example.com"}
+        result = _run_prepare(decisions, fake_ref_path=fake_ref.name)
+        brief = json.loads((bundle_path / "brief.json").read_text(encoding="utf-8")) if result.returncode == 0 else {}
+        copy_data = json.loads((bundle_path / "copy.json").read_text(encoding="utf-8")) if result.returncode == 0 else {}
+        ok = (result.returncode == 0
+              and brief.get("carousel_type") == FIXED_CAROUSEL_TYPE
+              and brief.get("product") == {"product_name": FIXED_PRODUCT_NAME, "purchase_url": FIXED_PURCHASE_URL}
+              and copy_data.get("product") == FIXED_PRODUCT_NAME
+              and copy_data.get("purchase_url") == FIXED_PURCHASE_URL)
+        report("TEST 11", "Formato Carrusel Interactivo + producto + enlace DP-CF001 impuestos siempre", ok,
+               f"rc={result.returncode} type={brief.get('carousel_type')} product={brief.get('product')}")
+    finally:
+        shutil.rmtree(bundle_path, ignore_errors=True)
+        Path(fake_ref.name).unlink(missing_ok=True)
+
+
+def test_12_menos_de_10_slides_stop():
+    """Copy que no alcanza para 10 slides -> STOP claro, sin crear el bundle."""
+    bundle_id = "__test-prepare-short-copy__"
+    result = _run_prepare_expect_stop(bundle_id, _make_decisions(bundle_id, n_slides=7))
+    ok = result.returncode != 0 and "El copy no alcanza" in result.stdout
+    report("TEST 12", "7 slides -> STOP 'El copy no alcanza para ... 10 slides'", ok,
+           f"rc={result.returncode} stdout_tail={result.stdout[-200:]!r}")
+
+
+def test_13_texto_repetido_stop():
+    """Repetir texto para rellenar 10 slides -> STOP."""
+    bundle_id = "__test-prepare-repeated__"
+    decisions = _make_decisions(bundle_id)
+    decisions["slides"][9]["exact_text"] = decisions["slides"][8]["exact_text"]
+    result = _run_prepare_expect_stop(bundle_id, decisions)
+    ok = result.returncode != 0 and "repiten el mismo texto" in result.stdout
+    report("TEST 13", "Texto repetido entre slides -> STOP", ok, f"rc={result.returncode}")
+
+
+def test_14_hashtags_exactamente_8():
+    """7 o 9 hashtags -> STOP; description/CTA vacios -> STOP."""
+    outcomes = []
+    for label, mutate in (
+        ("7 hashtags", lambda d: d["copy"].__setitem__("hashtags", ["#a", "#b", "#c", "#d", "#e", "#f", "#g"])),
+        ("9 hashtags", lambda d: d["copy"]["hashtags"].append("#i")),
+        ("cta vacio", lambda d: d["copy"].__setitem__("cta", "  ")),
+        ("descripcion vacia", lambda d: d["copy"].__setitem__("description", "")),
+    ):
+        bundle_id = "__test-prepare-copy-rules__"
+        decisions = _make_decisions(bundle_id)
+        mutate(decisions)
+        outcomes.append((label, _run_prepare_expect_stop(bundle_id, decisions).returncode != 0))
+    ok = all(stopped for _, stopped in outcomes)
+    report("TEST 14", "Exactamente 8 hashtags y descripcion/CTA obligatorios", ok, f"{outcomes}")
+
+
+def test_15_enlace_distinto_stop():
+    """Un enlace distinto del fijo dentro del CTA -> STOP."""
+    bundle_id = "__test-prepare-wrong-url__"
+    decisions = _make_decisions(bundle_id)
+    decisions["copy"]["cta"] = ("Siguiente paso: https://eldolorquenotepertenece.com?utm_source=facebook"
+                                "&utm_content=DP-CF126")
+    result = _run_prepare_expect_stop(bundle_id, decisions)
+    ok = result.returncode != 0 and "enlace distinto del fijo" in result.stdout
+    report("TEST 15", "CTA con enlace distinto de DP-CF001 -> STOP", ok, f"rc={result.returncode}")
+
+
+def test_16_mockup_aprobado_copiado():
+    """Slide con mockup -> se copia el original aprobado (sha256 verificado), nunca otro."""
+    bundle_id = "__test-prepare-mockup-ok__"
+    bundle_path = OUTPUTS_DIR / bundle_id
+    fake_ref = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+    fake_ref.write(_tiny_png())
+    fake_ref.close()
+    try:
+        entry = json.loads(PRODUCTS_JSON.read_text(encoding="utf-8"))["products"][FIXED_PRODUCT_NAME]
+        decisions = _make_decisions(bundle_id)
+        decisions["slides"][9]["uses_product_mockup_directly"] = True
+        result = _run_prepare(decisions, fake_ref_path=fake_ref.name)
+        dest = bundle_path / "carousel" / "assets" / "book-mockup-original.png"
+        sha = hashlib.sha256(dest.read_bytes()).hexdigest() if dest.exists() else None
+        ok = result.returncode == 0 and sha == entry["mockup_sha256"]
+        report("TEST 16", "Mockup original aprobado copiado al bundle con sha256 exacto", ok,
+               f"rc={result.returncode} sha={sha and sha[:12]} esperado={entry['mockup_sha256'][:12]}")
+    finally:
+        shutil.rmtree(bundle_path, ignore_errors=True)
+        Path(fake_ref.name).unlink(missing_ok=True)
+
+
+def test_17_mockup_ausente_o_distinto_stop():
+    """Mockup inexistente o con hash distinto -> MockupError; nunca se crea un sustituto."""
+    tmp = Path(tempfile.mkdtemp(prefix="test_prepare_mockup_"))
+    original = prepare_carousel.PRODUCTS_JSON
+    outcomes = []
+    try:
+        wrong_file = tmp / "otro-mockup.png"
+        wrong_file.write_bytes(_tiny_png())
+        for label, entry in (
+            ("archivo inexistente", {"mockup_path": str(tmp / "no-existe.png"), "mockup_sha256": "0" * 64}),
+            ("hash distinto", {"mockup_path": str(wrong_file), "mockup_sha256": "0" * 64}),
+            ("sin configurar", {}),
+        ):
+            fake_products = tmp / "products.json"
+            fake_products.write_text(json.dumps({"products": {FIXED_PRODUCT_NAME: entry}}), encoding="utf-8")
+            prepare_carousel.PRODUCTS_JSON = fake_products
+            bundle_path = tmp / "bundle"
+            try:
+                prepare_carousel.copy_mockup_to_bundle(bundle_path, True)
+                raised = False
+            except prepare_carousel.MockupError:
+                raised = True
+            no_substitute = not (bundle_path / "carousel" / "assets" / "book-mockup-original.png").exists()
+            outcomes.append((label, raised and no_substitute))
+    finally:
+        prepare_carousel.PRODUCTS_JSON = original
+        shutil.rmtree(tmp, ignore_errors=True)
+    ok = all(v for _, v in outcomes)
+    report("TEST 17", "Mockup ausente/distinto/no configurado -> STOP sin sustituto", ok, f"{outcomes}")
+
+
+# ============================================================
 # Main
 # ============================================================
 
@@ -571,6 +724,13 @@ def main():
         test_8_campo_faltante_rechazado,
         test_9_concurrencia_bundles_separados,
         test_10_reduccion_tool_calls,
+        test_11_config_fija_impuesta,
+        test_12_menos_de_10_slides_stop,
+        test_13_texto_repetido_stop,
+        test_14_hashtags_exactamente_8,
+        test_15_enlace_distinto_stop,
+        test_16_mockup_aprobado_copiado,
+        test_17_mockup_ausente_o_distinto_stop,
     ]:
         fn()
 

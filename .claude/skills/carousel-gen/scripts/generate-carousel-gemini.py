@@ -33,6 +33,7 @@ Requisitos:
 import sys
 import json
 import time
+import shutil
 import argparse
 import dataclasses
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -42,12 +43,12 @@ from typing import Any, Dict, List, Optional, Set
 sys.path.insert(0, str(Path(__file__).parent))
 
 from carousel_common import (  # noqa: E402
-    OUTPUTS_DIR, MAX_SLIDES,
+    OUTPUTS_DIR, MAX_SLIDES, FIXED_HASHTAG_COUNT, COSTO_CARRUSEL_FILENAME,
     load_brief, detect_entities_in_slides, build_prompt_for_slide,
     generate_assets_needed_md, generate_manifest, export_final_slides_to_downloads,
     save_copy_deliverables, save_costo_carrusel,
 )
-from gemini_config import load_config, GeminiConfig  # noqa: E402
+from gemini_config import load_config, GeminiConfig, MAX_REGENERATIONS  # noqa: E402
 from gemini_client import GeminiClient, FakeGeminiClient, GeminiImageResult  # noqa: E402
 from reference_manager import decide_reference_plan, reference_identifier, ReferenceMode  # noqa: E402
 from prompt_hash import compute_prompt_hash, hash_file_bytes  # noqa: E402
@@ -278,9 +279,10 @@ def process_slides(
     Procesa una lista de slides (ya excluidos los REUSED): construye sus tareas, genera
     SIEMPRE en DIRECT MODE paralelo (salvo --force-batch explicito, ver SKILL.md
     "FABRICA RAPIDA"), corre QA ESTRUCTURAL + TEXT QA (ver save_image_and_qa) y aplica
-    UN UNICO presupuesto de reintentos (config.max_retries, por defecto 1 = maximo 2
+    UN UNICO presupuesto de regeneraciones (config.max_retries, maximo 2 = maximo 3
     intentos totales por slide) compartido por cualquier causa de fallo — generacion,
-    QA estructural o Text QA. Devuelve
+    QA estructural o Text QA. Tras el ultimo intento la ultima imagen generada se conserva
+    en disco y el slide queda TEXT_QA_FAILED/FAILED_FINAL; el pipeline continua. Devuelve
     {slide_number: "APPROVED" | "TEXT_QA_APPROVED" | "FAILED_FINAL" | "TEXT_QA_FAILED"}.
 
     `text_qa_summary`, si se pasa, se actualiza in-place con los contadores agregados
@@ -325,8 +327,14 @@ def process_slides(
             metadata={"bundle_id": bundle_id, "slide_number": str(slide_number)},
         ))
 
-    retry_round = 0
-    while tasks:
+    # Bucle ACOTADO (regla permanente de regeneracion, ver SKILL.md "CONFIGURACIÓN FIJA"):
+    # como maximo 1 + config.max_retries rondas (techo duro gemini_config.MAX_REGENERATIONS
+    # = 2 -> 3 rondas). Un slide solo vuelve a la cola si retry_round < max_retries, asi que
+    # tras la ultima ronda no queda nada pendiente — nunca hay loop infinito.
+    max_regenerations = max(0, min(config.max_retries, MAX_REGENERATIONS))
+    for retry_round in range(max_regenerations + 1):
+        if not tasks:
+            break
         # FABRICA RAPIDA (regla obligatoria y permanente, ver SKILL.md): el modo normal
         # de produccion SIEMPRE es DIRECT (paralelo, ver direct_generator.py) sin
         # importar ECONOMY_MODE/GEMINI_BATCH_ENABLED — Batch puede tardar hasta 24h
@@ -362,7 +370,7 @@ def process_slides(
 
             if not result.success:
                 print(f"   [ERROR] Slide {slide_number} - fallo generando: {result.error}")
-                should_retry = retry_round < config.max_retries
+                should_retry = retry_round < max_regenerations
                 # billable=False: la llamada a Gemini NUNCA produjo una imagen (fallo de
                 # red/API/respuesta vacia) — no hay nada que facturar (ver SKILL.md
                 # "COSTO REAL": "Cada llamada real a Gemini que produzca una imagen debe
@@ -377,7 +385,7 @@ def process_slides(
                     next_round_tasks.append(task)
                 else:
                     final_status[slide_number] = "FAILED_FINAL"
-                    print(f"      -> Agotados los reintentos (MAX_RETRIES={config.max_retries}). "
+                    print(f"      -> Agotadas las regeneraciones ({max_regenerations}). "
                           f"Slide {slide_number} queda FAILED_FINAL.")
                     # Actualizar cache para que el manifest registre FAILED_FINAL (no UNKNOWN).
                     # Esta ruta (respuesta vacia/fallo de generacion) no pasa por save_image_and_qa,
@@ -453,7 +461,7 @@ def process_slides(
                 # dos presupuestos apilables (ver SKILL.md). Por defecto 1: 1 intento
                 # inicial + 1 regeneracion como maximo, y solo por error CRITICO (Text QA
                 # ya reclasifica UNCERTAIN -> approved=True antes de llegar aqui).
-                budget = config.max_retries
+                budget = max_regenerations
                 cause_label = "TEXT QA" if is_text_qa_failure else "QA estructural"
                 print(f"   [ERROR] Slide {slide_number} - rechazado por {cause_label}: {reason}")
                 should_retry = retry_round < budget
@@ -485,7 +493,7 @@ def process_slides(
                         text_qa_status=failed_status if is_text_qa_failure else None,
                         text_qa_rejection_reason=(text_qa_result.reason if text_qa_result else None),
                     ))
-                    print(f"      -> Agotados los reintentos (MAX_RETRIES={budget}). "
+                    print(f"      -> Agotadas las regeneraciones ({budget}). "
                           f"Slide {slide_number} queda {failed_status} — se acepta que no "
                           f"paso QA y se continua (nunca ciclos de correccion sin limite).")
                 continue
@@ -517,7 +525,6 @@ def process_slides(
             )
 
         tasks = next_round_tasks
-        retry_round += 1
 
     return final_status
 
@@ -541,9 +548,14 @@ def _apply_copy_json(bundle_path: Path, copy_json_path: Path) -> Optional[str]:
         return (f"el producto '{copy_data['product']}' no tiene 'purchase_url'. "
                 f"El paquete no se guarda sin el enlace de compra.")
 
+    empty = [k for k in ("description", "cta") if not str(copy_data.get(k) or "").strip()]
+    if empty:
+        return f"campos de copy vacios: {empty}. Descripcion y CTA nunca pueden omitirse."
+
     n_hashtags = len(copy_data.get("hashtags") or [])
-    if not (8 <= n_hashtags <= 10):
-        print(f"[WARN] Advertencia: se esperaban entre 8 y 10 hashtags, hay {n_hashtags}. Continua igualmente.")
+    if n_hashtags != FIXED_HASHTAG_COUNT:
+        return (f"se requieren exactamente {FIXED_HASHTAG_COUNT} hashtags, hay {n_hashtags}. "
+                f"El copy no se guarda.")
 
     save_copy_deliverables(
         bundle_path,
@@ -810,6 +822,25 @@ def run_generation(args) -> int:
         "text_errors_detected": text_qa_summary.get("text_errors_detected", 0),
         "text_errors_fixed": len(text_qa_summary.get("_fixed_slides", set())),
     }
+    # Slides entregados con aviso pendiente (regla permanente de regeneracion, ver SKILL.md
+    # "CONFIGURACIÓN FIJA"): agotaron las regeneraciones sin pasar QA (se conserva la
+    # ultima imagen) o no tienen PNG. Nunca bloquea: se registra y el pipeline continua.
+    pending_slides = []
+    for s in slides:
+        num = s["number"]
+        record = cache.get(num)
+        png_delivered = (carousel_dir / f"carousel-{num:02d}.png").exists()
+        status = record.status if record else "UNKNOWN"
+        if png_delivered and status not in ("TEXT_QA_FAILED", "FAILED_FINAL"):
+            continue
+        pending_slides.append({
+            "slide": num,
+            "status": status if png_delivered else "MISSING_PNG",
+            "attempts": (record.retry_count + 1) if record else None,
+            "reason": (record.text_qa_rejection_reason or record.last_error) if record else None,
+            "png_delivered": png_delivered,
+        })
+    text_qa_manifest_block["pending_slides"] = pending_slides
 
     print("Generando manifest...")
     generate_manifest(
@@ -868,6 +899,11 @@ def run_generation(args) -> int:
         config.image_model, config.image_size, config.aspect_ratio, len(slides),
         text_qa_manifest_block, str(downloads_dest or bundle_path),
     )
+    # COSTO_CARRUSEL.txt se escribe DESPUES del export: copiarlo tambien al archivo local
+    # para que el paquete archivado quede completo.
+    costo_file = bundle_path / COSTO_CARRUSEL_FILENAME
+    if downloads_dest and costo_file.exists():
+        shutil.copy2(costo_file, Path(downloads_dest) / COSTO_CARRUSEL_FILENAME)
 
     cost_tracker.print_summary()
 
@@ -882,6 +918,9 @@ def run_generation(args) -> int:
 
     total_slides_expected = len(only_slides) if only_slides else len(slides)
     total_ok = len([f for f in carousel_dir.glob("carousel-*.png")])
+    if copy_error:
+        # Paquete incompleto (falta el copy): nunca se reporta como exito.
+        return 1
     return 0 if total_ok >= total_slides_expected else 1
 
 
