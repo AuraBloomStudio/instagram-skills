@@ -20,10 +20,14 @@ advertencia explicita, nunca bloquea la generacion por falta de una dependencia 
 opcional) — esto se refleja siempre en el manifest, nunca se oculta.
 
 FABRICA RAPIDA (ver SKILL.md): cada `TextQAResult` tiene `severity` en
-PASS/CRITICAL/UNCERTAIN/SKIPPED. Solo CRITICAL bloquea (dispara la unica regeneracion
-permitida). Cuando la confianza del OCR sobre la imagen es baja, un hallazgo que
-normalmente seria CRITICAL se reclasifica UNCERTAIN y se aprueba igual — "OCR dudoso"
-nunca detiene la fabrica (ver `_apply_ocr_confidence_downgrade`).
+PASS/CRITICAL/UNCERTAIN/SKIPPED. CRITICAL (dispara una regeneracion, maximo 2 por slide)
+SOLO con evidencia estructural: palabras faltantes, duplicadas o anadidas. El ruido de
+letras palabra por palabra (acentos, ñ, una letra confundida) queda UNCERTAIN: aprobado y
+registrado. Desde 2026-09-26, antes de declarar CRITICAL se relee la imagen con lecturas
+OCR alternativas (`extract_text_variants`): si alguna sale sin problemas estructurales,
+era un fallo del OCR y la imagen se aprueba. La baja confianza del OCR ya NO rebaja un
+problema estructural (`_apply_ocr_confidence_downgrade` se conserva solo por
+compatibilidad, el pipeline ya no la usa).
 """
 
 import hashlib
@@ -149,34 +153,48 @@ def _looks_like_ocr_misread(expected_block: List[str], rendered_block: List[str]
     if shortest < _OCR_MISREAD_MIN_LENGTH:
         return _edit_distance(joined_expected, joined_rendered) <= _OCR_MISREAD_MAX_EDITS_SHORT
     allowed = max(_OCR_MISREAD_MIN_ALLOWED_EDITS, round(len(joined_expected) * _OCR_MISREAD_EDIT_RATIO))
-    if _edit_distance(joined_expected, joined_rendered) <= allowed:
+    # ELIMINADO (2026-09-26): la antigua tolerancia por "fragmentacion de bloque" (N
+    # palabras esperadas -> M < N leidas, aceptada si cada palabra leida se parecia a
+    # alguna esperada) aprobaba PERDIDAS REALES de palabras — casos confirmados
+    # visualmente: "nina no podias" -> "nifia pdas" (faltaba "no"), "anos buscando
+    # personas emocionalmente" -> "emconalmente". Una perdida de palabras solo se tolera
+    # si los bloques JUNTADOS son casi identicos (fusion de palabras, arriba); si no, la
+    # decide `compare_text` como MISSING_TOKEN, y un falso positivo del OCR se corrige con
+    # la lectura OCR alternativa de `run_text_qa`, nunca aprobando la perdida.
+    return _edit_distance(joined_expected, joined_rendered) <= allowed
+
+
+def _same_word(a: str, b: str) -> bool:
+    """True si dos tokens son la MISMA palabra salvo ruido tipico de OCR (acentos, ñ
+    leida como 'fi'/'ii', una letra confundida). Solo palabras de 3+ caracteres: por
+    debajo no hay informacion suficiente para afirmar que se repitio una palabra."""
+    if len(a) < 3 or len(b) < 3:
+        return False
+    if a == b:
         return True
-    # Fragmentacion de bloque OCR: cuando Tesseract recibe un bloque de N palabras y
-    # produce M < N tokens con alto grado de corrupcion combinada, la distancia de edicion
-    # de los strings JUNTADOS supera el umbral anterior — pero cada token renderizado
-    # sigue siendo identificable como una lectura corrupta de algun token esperado. Caso
-    # real (2026-09-18, carousel umbral-dolor-nina): ['problemas', 'considerados', 'mas',
-    # 'importantes', 'y', 'silencios'] -> ['problenas', 'cmportantes'] — 6 tokens esperados,
-    # 2 renderizados, edit distance juntados ~24 >> allowed 8. Sin embargo 'problenas' es
-    # 'problemas' con 1 substitucion, y 'cmportantes' es 'importantes' con 1 substitucion.
-    # Clasificar estos como TEXT_CORRUPTION/CRITICAL (y gastar 1 retry en imagenes que
-    # posiblemente son correctas) es incorrecto — deben ser OCR_LIKELY_MISREAD/UNCERTAIN.
-    # NUNCA se aplica a EXTRA_TOKEN (tokens inventados) ni MISSING_TOKEN (tokens ausentes),
-    # solo a reemplazos de bloque (esta funcion solo se llama para "replace" en el diff).
-    if len(rendered_block) < len(expected_block) and rendered_block:
-        all_explainable = True
-        for ren_tok in rendered_block:
-            if len(ren_tok) < 2:
-                continue  # token demasiado corto para juzgar similitud
-            best_dist = min(_edit_distance(ren_tok, exp_tok) for exp_tok in expected_block)
-            # Tolerancia por token: 35% de su longitud, minimo 2 ediciones — cubre
-            # confusiones comunes (ñ->fi = 2 ediciones, acento perdido = 1 sustitucion,
-            # digito confundido con letra = 1 sustitucion).
-            allowed_tok = max(2, round(len(ren_tok) * 0.35))
-            if best_dist > allowed_tok:
-                all_explainable = False
-                break
-        if all_explainable:
+    return _edit_distance(a, b) <= max(2, round(max(len(a), len(b)) * 0.35))
+
+
+def _duplication_in_replace(exp_tokens: List[str], i1: int, i2: int,
+                            ren_block: List[str]) -> bool:
+    """
+    Detecta una DUPLICACION real escondida dentro de un bloque reemplazado del diff
+    (el OCR deforma la palabra repetida, asi que no aparece como 'insert' exacto).
+    Casos reales confirmados visualmente (2026-09-26): "años años" leido como
+    ['aiios', 'aiios'] / ['aos', 'afios'] en lugar de ['anos']; "puedes puedes
+    reconicer" en lugar de "puedes reconocer" (la palabra previa se repite al inicio).
+    """
+    exp_block = exp_tokens[i1:i2]
+    # 1) Dos palabras consecutivas iguales en lo leido que el texto esperado no tiene.
+    exp_pairs = any(_same_word(exp_block[k], exp_block[k + 1]) for k in range(len(exp_block) - 1))
+    if not exp_pairs and any(_same_word(ren_block[k], ren_block[k + 1]) for k in range(len(ren_block) - 1)):
+        return True
+    # 2) El bloque leido tiene MAS palabras y arranca repitiendo la palabra anterior, o
+    #    termina repitiendo la palabra siguiente.
+    if len(ren_block) > len(exp_block) and ren_block:
+        if i1 > 0 and _same_word(ren_block[0], exp_tokens[i1 - 1]) and not (exp_block and _same_word(ren_block[0], exp_block[0])):
+            return True
+        if i2 < len(exp_tokens) and _same_word(ren_block[-1], exp_tokens[i2]) and not (exp_block and _same_word(ren_block[-1], exp_block[-1])):
             return True
     return False
 
@@ -316,7 +334,15 @@ def compare_text(expected: str, rendered: str) -> TextQAResult:
         if tag == "insert":
             inserted = ren_tokens[j1:j2]
             preceding_expected = exp_tokens[max(0, i1 - len(inserted)):i1]
-            if preceding_expected == inserted:
+            following_expected = exp_tokens[i1:i1 + len(inserted)]
+            if preceding_expected == inserted or (
+                len(inserted) == len(preceding_expected)
+                and all(_same_word(a, b) for a, b in zip(inserted, preceding_expected))
+            ) or (
+                len(inserted) == len(following_expected)
+                and all(_same_word(a, b) for a, b in zip(inserted, following_expected))
+            ):
+                # Repeticion real, aunque el OCR deforme la copia (ej. "años aiios").
                 issues.append((REASON_DUPLICATED_TOKEN, inserted))
             elif _all_short_alphabetic_noise(inserted):
                 # Tokens extra cortos y alfabéticos = artefacto de OCR sobre tipografía
@@ -334,8 +360,16 @@ def compare_text(expected: str, rendered: str) -> TextQAResult:
         elif tag == "replace":
             exp_block = exp_tokens[i1:i2]
             ren_block = ren_tokens[j1:j2]
-            if _looks_like_ocr_misread(exp_block, ren_block):
+            if _duplication_in_replace(exp_tokens, i1, i2, ren_block):
+                issues.append((REASON_DUPLICATED_TOKEN, [exp_block, ren_block]))
+            elif _looks_like_ocr_misread(exp_block, ren_block):
                 issues.append((REASON_OCR_LIKELY_MISREAD, [exp_block, ren_block]))
+            elif len(ren_block) < len(exp_block):
+                # Se leyeron MENOS palabras de las esperadas y no es una simple fusion de
+                # palabras (eso ya lo acepta _looks_like_ocr_misread): perdida real de
+                # contenido. Si fuera un fallo del OCR, la lectura alternativa de
+                # run_text_qa lo resuelve — nunca se aprueba la perdida sin mas.
+                issues.append((REASON_MISSING_TOKEN, [exp_block, ren_block]))
             else:
                 issues.append((REASON_TEXT_CORRUPTION, [exp_block, ren_block]))
 
@@ -658,6 +692,41 @@ def run_text_qa(
             expected_text_hash=_hash_text(expected_text), rendered_text_hash="", skipped=True,
         )
 
+    result = _evaluate_reading(expected_text, rendered, critical_phrases,
+                               authorized_extra_tokens, uses_product_mockup)
+    if result.approved:
+        return result
+
+    # LECTURA OCR ALTERNATIVA (2026-09-26): un error que esta en los pixeles aparece en
+    # cualquier lectura; un fallo del OCR cambia de una lectura a otra. Solo si la lectura
+    # normal encontro un problema, se relee la imagen ampliada y binarizada (texto claro
+    # y texto oscuro). Si alguna lectura sale sin problemas estructurales, la imagen se
+    # aprueba (caso real: slide 10 correcto, en cursiva, donde la 1a lectura "perdia"
+    # la palabra "hubo"). Si todas fallan, el error es real -> CRITICAL. Nunca se aprueba
+    # un problema estructural por baja confianza del OCR.
+    for variant_name, variant_text in extract_text_variants(image_path):
+        alt = _evaluate_reading(expected_text, variant_text, critical_phrases,
+                                authorized_extra_tokens, uses_product_mockup)
+        if alt.approved:
+            if alt.severity == "PASS":
+                alt.severity = "UNCERTAIN"
+            alt.detail = (f"Lectura OCR alternativa ({variant_name}) sin errores estructurales; "
+                          f"la lectura normal habia dado: {result.detail} || {alt.detail}")
+            return alt
+    return result
+
+
+def _evaluate_reading(
+    expected_text: str,
+    rendered: str,
+    critical_phrases: Optional[List[Tuple[str, str]]],
+    authorized_extra_tokens: Optional[List[str]],
+    uses_product_mockup: bool,
+) -> TextQAResult:
+    """Evalua UNA lectura OCR del slide: comparacion + texto autorizado + tolerancia de
+    la portada del mockup + frases criticas. CRITICAL solo con evidencia estructural
+    (palabras faltantes, duplicadas o anadidas); el ruido de letras palabra por palabra
+    queda UNCERTAIN (aprobado, registrado)."""
     result = compare_text(expected_text, rendered)
 
     # Post-proceso: si hay tokens extra (EXTRA_TOKEN / UNAUTHORIZED_TEXT_ELEMENT) que
@@ -698,11 +767,53 @@ def run_text_qa(
             result.detail = (f"TEXTO DEL MOCKUP (portada del producto en imagen, no del slide) — {result.detail}")
 
     if not result.approved:
-        return _apply_ocr_confidence_downgrade(result, image_path)
+        return result
 
     for label, phrase in critical_phrases or []:
         phrase_result = check_exact_phrase(phrase, rendered, label=label)
         if not phrase_result.approved:
-            return _apply_ocr_confidence_downgrade(phrase_result, image_path)
+            duplicated = any(i[0] == REASON_DUPLICATED_TOKEN for i in phrase_result.issues)
+            if uses_product_mockup and label == REASON_PRODUCT_TITLE_MISMATCH and not duplicated:
+                # El titulo vive en la portada del mockup (texto pequeno, dentro de la
+                # foto): que el OCR no lo lea no prueba que falte. Duplicado si es CRITICAL.
+                result.severity = "UNCERTAIN"
+                result.detail = f"{result.detail} | titulo del producto no legible por OCR en la portada (no bloqueante)"
+                continue
+            return phrase_result
 
     return result
+
+
+def extract_text_variants(image_path: Path):
+    """
+    Lecturas OCR ALTERNATIVAS de la misma imagen (100% local), para confirmar o
+    descartar un hallazgo de la lectura normal: imagen en escala de grises ampliada x2 y
+    binarizada, una vez para texto CLARO sobre fondo oscuro y otra para texto OSCURO
+    sobre fondo claro. Genera (nombre, texto); no genera nada si el OCR no esta
+    disponible.
+    """
+    try:
+        import pytesseract
+        from PIL import Image, ImageOps
+    except ImportError:
+        return
+    if not getattr(pytesseract.pytesseract, "tesseract_cmd", None) or pytesseract.pytesseract.tesseract_cmd == "tesseract":
+        for candidate in _TESSERACT_CANDIDATE_PATHS:
+            if Path(candidate).exists():
+                pytesseract.pytesseract.tesseract_cmd = candidate
+                break
+    try:
+        with Image.open(image_path) as img:
+            gray = ImageOps.grayscale(img.convert("RGB"))
+            big = gray.resize((gray.width * 2, gray.height * 2), Image.LANCZOS)
+    except Exception:  # noqa: BLE001 - sin lectura alternativa posible, nunca bloquea
+        return
+    variants = (
+        ("x2 texto claro", big.point(lambda v: 0 if v > 150 else 255)),
+        ("x2 texto oscuro", big.point(lambda v: 0 if v < 110 else 255)),
+    )
+    for name, variant in variants:
+        try:
+            yield name, pytesseract.image_to_string(variant, lang="spa+eng")
+        except Exception:  # noqa: BLE001
+            continue

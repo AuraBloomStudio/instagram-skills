@@ -34,6 +34,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from carousel_common import (  # noqa: E402
     build_copy_final_text, save_copy_deliverables, COPY_FINAL_FILENAME, OUTPUTS_DIR,
+    COPY_DIRNAME, COPY_FILENAMES,
 )
 
 PASS, FAIL = "PASS", "FAIL"
@@ -94,19 +95,25 @@ def test_4_hashtags_unidos_por_espacio():
 def test_5_solo_copy_final_se_crea():
     tmp = Path(tempfile.mkdtemp(prefix="carouselgen_test_copyfinal_"))
     try:
+        hashtags = ["#a", "#b", "#c", "#d", "#e", "#f", "#g", "#h"]
         save_copy_deliverables(
             tmp, description="Descripcion completa.", cta="CTA completo.",
-            hashtags=["#a", "#b", "#c", "#d", "#e", "#f", "#g", "#h"],
-            product="Libro X", purchase_url="https://ejemplo.com/x",
+            hashtags=hashtags, product="Libro X", purchase_url="https://ejemplo.com/x",
         )
-        copy_final_exists = (tmp / COPY_FINAL_FILENAME).exists()
-        legacy_absent = not any(
-            (tmp / name).exists() for name in ("description.txt", "cta.txt", "hashtags.txt")
+        copy_dir = tmp / COPY_DIRNAME
+        all_in_copy = all((copy_dir / n).exists() for n in COPY_FILENAMES)
+        root_absent = not any(
+            (tmp / name).exists() for name in COPY_FILENAMES + ("description.txt", "cta.txt", "hashtags.txt")
         )
-        report("TEST 5", "save_copy_deliverables crea UNICAMENTE COPY_FINAL.txt — nunca "
-                          "description.txt/cta.txt/hashtags.txt",
-               copy_final_exists and legacy_absent,
-               f"COPY_FINAL.txt={copy_final_exists} legacy_absent={legacy_absent}")
+        desc_ok = (copy_dir / "DESCRIPCION.txt").read_text(encoding="utf-8").strip() == "Descripcion completa."
+        cta_text = (copy_dir / "CTA.txt").read_text(encoding="utf-8")
+        cta_ok = "CTA completo." in cta_text and "https://ejemplo.com/x" in cta_text
+        tags_ok = (copy_dir / "HASHTAGS.txt").read_text(encoding="utf-8").split() == hashtags
+        ok = all_in_copy and root_absent and desc_ok and cta_ok and tags_ok
+        report("TEST 5", "save_copy_deliverables crea copy/COPY_FINAL.txt + DESCRIPCION.txt + CTA.txt "
+                          "(con enlace) + HASHTAGS.txt, y nada de copy en la raiz del bundle",
+               ok, f"all_in_copy={all_in_copy} root_absent={root_absent} desc={desc_ok} "
+                   f"cta={cta_ok} tags={tags_ok}")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -126,7 +133,7 @@ def test_6_manifest_actualizado_correctamente():
 
         manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
         ok = (
-            manifest.get("copy_final_file") == COPY_FINAL_FILENAME
+            manifest.get("copy_final_file") == f"{COPY_DIRNAME}/{COPY_FINAL_FILENAME}"
             and manifest.get("description") == "D"
             and manifest.get("cta") == "C"
             and manifest.get("product") == "Libro Y"
@@ -191,7 +198,7 @@ def test_8_cli_rechaza_producto_sin_purchase_url():
             timeout=30, env=env,
         )
 
-        copy_final_created = (bundle_path / COPY_FINAL_FILENAME).exists()
+        copy_final_created = (bundle_path / COPY_DIRNAME / COPY_FINAL_FILENAME).exists()
         ok = result.returncode != 0 and not copy_final_created
         report("TEST 8", "CLI --add-copy RECHAZA (exit != 0) un producto sin purchase_url "
                           "y nunca crea COPY_FINAL.txt (compuerta de no finalizar incompleto)",

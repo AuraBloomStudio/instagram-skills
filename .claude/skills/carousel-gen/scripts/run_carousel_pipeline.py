@@ -37,7 +37,7 @@ from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from carousel_common import OUTPUTS_DIR  # noqa: E402
+from carousel_common import OUTPUTS_DIR, DOWNLOADS_EXPORT_DIR  # noqa: E402
 
 
 def _now_iso() -> str:
@@ -130,6 +130,8 @@ def _build_result(
                 result["errors"] = errors
             text_qa = manifest.get("text_qa") or {}
             result["text_qa_status"] = text_qa.get("status", "UNKNOWN")
+            # Slides entregados con aviso pendiente (agotaron las regeneraciones o sin PNG)
+            result["warnings"] = text_qa.get("pending_slides") or []
         except (json.JSONDecodeError, OSError):
             pass
 
@@ -160,11 +162,11 @@ def _build_result(
         result["status"] = "FAILED" if rc != 0 else "COMPLETED"
 
     # Output path: preferir Downloads si existe
-    downloads_dir = Path.home() / "Downloads" / "Carruseles Carousel-Gen" / bundle_id
+    downloads_dir = DOWNLOADS_EXPORT_DIR / bundle_id
     carousel_dir = bundle_path / "carousel"
     if downloads_dir.exists():
         result["output_path"] = str(downloads_dir)
-        result["files"] = sorted(f.name for f in downloads_dir.glob("carousel-*.png"))
+        result["files"] = sorted(f.name for f in (downloads_dir / "carousel").glob("carousel-*.png"))
     elif carousel_dir.exists():
         result["output_path"] = str(carousel_dir)
         result["files"] = sorted(f.name for f in carousel_dir.glob("carousel-*.png"))

@@ -20,6 +20,15 @@ from dotenv import load_dotenv
 sys.path.insert(0, str(Path(__file__).parent))
 from carousel_common import MAX_SLIDES as _HARD_MAX_SLIDES  # noqa: E402
 
+# REGLA PERMANENTE DE REGENERACION (ver SKILL.md "CONFIGURACIÓN FIJA"): cada slide tiene
+# 1 intento inicial + COMO MAXIMO 2 regeneraciones automaticas. Techo duro: MAX_RETRIES
+# en .env puede bajarlo, nunca subirlo.
+MAX_REGENERATIONS = 2
+
+# Tiempo maximo (segundos) de cada llamada a Gemini: una llamada colgada falla y consume
+# un intento, en vez de bloquear el pipeline indefinidamente.
+GEMINI_REQUEST_TIMEOUT_SECONDS = 120
+
 _ENV_PATH = Path(__file__).parent.parent / ".env"
 load_dotenv(_ENV_PATH)
 
@@ -64,11 +73,10 @@ class GeminiConfig:
     batch_enabled: bool
 
     # --- Limites y reintentos ---
-    # Presupuesto UNICO de reintentos, compartido por fallos de generacion, QA
-    # estructural Y Text QA (ver SKILL.md "FABRICA RAPIDA"): 1 intento inicial + hasta
-    # `max_retries` regeneraciones. Por defecto 1 (maximo 2 intentos totales por slide,
-    # y esa unica regeneracion solo se dispara por error CRITICO) — nunca dos
-    # presupuestos separados que se puedan apilar.
+    # Presupuesto UNICO de regeneraciones, compartido por fallos de generacion, QA
+    # estructural Y Text QA (ver SKILL.md "CONFIGURACIÓN FIJA"): 1 intento inicial + hasta
+    # `max_retries` regeneraciones, con techo duro MAX_REGENERATIONS (2) — maximo 3
+    # intentos totales por slide, solo por error CRITICO. Nunca dos presupuestos apilables.
     max_slides: int
     max_retries: int
 
@@ -129,7 +137,7 @@ def load_config() -> GeminiConfig:
         # romper .env existentes y para uso informativo en el manifest.
         batch_enabled=_get_bool("GEMINI_BATCH_ENABLED", False),
         max_slides=effective_max_slides,
-        max_retries=_get_int("MAX_RETRIES", 1),
+        max_retries=max(0, min(_get_int("MAX_RETRIES", MAX_REGENERATIONS), MAX_REGENERATIONS)),
         text_qa_enabled=_get_bool("TEXT_QA_ENABLED", True),
         price_per_image_usd=_get_float("GEMINI_IMAGE_PRICE_PER_IMAGE", 0.0),
         kie_enabled=_get_bool("KIE_ENABLED", False),

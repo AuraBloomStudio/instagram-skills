@@ -172,7 +172,8 @@ def test_2_uncertain_nunca_regenera():
         # confianza baja -> debe degradarse a UNCERTAIN y aprobar sin regenerar.
         from text_qa import TextQAResult, _OCR_UNCERTAIN_CONFIDENCE_THRESHOLD
 
-        def _fake_run_text_qa(image_path, expected_text, critical_phrases=None, authorized_extra_tokens=None):
+        def _fake_run_text_qa(image_path, expected_text, critical_phrases=None, authorized_extra_tokens=None,
+                              uses_product_mockup=False):
             base = TextQAResult(
                 approved=False, reason="TEXT_CORRUPTION", detail="simulado",
                 expected_text_hash="e", rendered_text_hash="r",
@@ -254,7 +255,8 @@ def test_4_text_qa_de_la_tanda_en_paralelo():
         lock = threading.Lock()
         intervals: List[tuple] = []
 
-        def _slow_save_image_and_qa(carousel_dir_, slide_number, image_bytes, config, expected_text, critical_phrases=None, authorized_extra_tokens=None):
+        def _slow_save_image_and_qa(carousel_dir_, slide_number, image_bytes, config, expected_text, critical_phrases=None, authorized_extra_tokens=None,
+                                    uses_product_mockup=False):
             start = time.time()
             time.sleep(delay)
             end = time.time()
@@ -374,7 +376,7 @@ def test_6_una_sola_ejecucion_con_copy_json():
         )
         rc = mod.run_generation(args)
 
-        copy_final_exists = (bundle_path / "COPY_FINAL.txt").exists()
+        copy_final_exists = (bundle_path / "copy" / "COPY_FINAL.txt").exists()
         costo_exists = (bundle_path / "COSTO_CARRUSEL.txt").exists()
         image_exists = (bundle_path / "carousel" / "carousel-01.png").exists()
         ok = rc == 0 and copy_final_exists and costo_exists and image_exists

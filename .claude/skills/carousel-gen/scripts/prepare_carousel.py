@@ -11,8 +11,8 @@ Este script ejecuta TODA la preparacion determinista sin ninguna intervencion ad
              |
              ├─ crea bundle + directorios
              ├─ extrae referencia del transcript JSONL
-             ├─ resuelve producto / URL de products.json
-             ├─ copia mockup si existe
+             ├─ impone la CONFIGURACION FIJA (formato, 10 slides, producto, URL, 8 hashtags)
+             ├─ copia el mockup original aprobado (verificado por sha256) si un slide lo usa
              ├─ calcula campos derivados (word_count, text_density, ...)
              ├─ valida los 21 REQUIRED_SLIDE_FIELDS por slide
              ├─ escribe brief.json (UNA vez, ya validado)
@@ -62,6 +62,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -70,7 +71,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).parent))
-from carousel_common import OUTPUTS_DIR, REQUIRED_SLIDE_FIELDS, load_brief  # noqa: E402
+from carousel_common import (  # noqa: E402
+    OUTPUTS_DIR, REQUIRED_SLIDE_FIELDS, load_brief,
+    FIXED_CAROUSEL_TYPE, FIXED_SLIDE_COUNT, FIXED_PRODUCT_NAME, FIXED_PURCHASE_URL,
+    FIXED_HASHTAG_COUNT,
+)
 from text_qa import verify_source_text_fragments  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -80,11 +85,11 @@ from text_qa import verify_source_text_fragments  # noqa: E402
 PRODUCTS_JSON = Path(__file__).parent.parent / "products.json"
 SAVE_REF_SCRIPT = Path(__file__).parent / "save_reference_image.py"
 
-# Productos conocidos que tienen mockup — nombre exacto (case-sensitive) -> ruta relativa al bundle raiz
-_PRODUCT_MOCKUP_SEARCH_DIRS = [
-    OUTPUTS_DIR,
-]
+# Nombre con el que el mockup original aprobado se copia dentro de cada bundle. El ORIGEN
+# es siempre products.json -> mockup_path (verificado con mockup_sha256), nunca otro bundle.
 _BOOK_MOCKUP_BASENAME = "book-mockup-original.png"
+
+_URL_RE = re.compile(r"https?://\S+")
 
 # Umbrales para text_density
 _DENSITY_LOW_MAX = 8
@@ -212,40 +217,119 @@ def resolve_product(product_decision: Dict[str, Any]) -> Dict[str, Any]:
 # Busqueda de mockup de producto
 # ---------------------------------------------------------------------------
 
-def find_product_mockup(bundle_path: Path) -> Optional[Path]:
+class MockupError(Exception):
+    """El mockup original aprobado no esta disponible o no coincide con su sha256."""
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def find_product_mockup() -> Path:
     """
-    Busca el mockup del producto copiado en algun bundle anterior.
-    Solo mira 1 nivel: outputs/bundles/*/carousel/assets/book-mockup-original.png
-    Retorna la ruta si existe, None si no.
+    Devuelve la ruta del mockup ORIGINAL APROBADO de FIXED_PRODUCT_NAME, leida de
+    products.json (mockup_path) y verificada contra mockup_sha256. Nunca busca en bundles
+    anteriores ni crea un sustituto: si falta o no coincide, lanza MockupError.
     """
-    bundles_dir = OUTPUTS_DIR
-    if not bundles_dir.exists():
-        return None
-    for candidate_dir in sorted(bundles_dir.iterdir(), reverse=True):
-        if not candidate_dir.is_dir():
-            continue
-        candidate = candidate_dir / "carousel" / "assets" / _BOOK_MOCKUP_BASENAME
-        if candidate.exists() and candidate_dir != bundle_path:
-            return candidate
-    return None
+    try:
+        entry = json.loads(PRODUCTS_JSON.read_text(encoding="utf-8"))["products"][FIXED_PRODUCT_NAME]
+    except (OSError, json.JSONDecodeError, KeyError) as e:
+        raise MockupError(f"products.json no tiene la entrada '{FIXED_PRODUCT_NAME}' ({e})")
+    mockup_path = entry.get("mockup_path")
+    expected_sha = (entry.get("mockup_sha256") or "").lower()
+    if not mockup_path or not expected_sha:
+        raise MockupError(f"products.json no define 'mockup_path' y 'mockup_sha256' para '{FIXED_PRODUCT_NAME}'")
+    src = Path(mockup_path)
+    if not src.is_file():
+        raise MockupError(f"el mockup original aprobado no existe en: {src}")
+    actual_sha = _sha256(src)
+    if actual_sha != expected_sha:
+        raise MockupError(f"el archivo {src} no es el mockup aprobado "
+                          f"(sha256 {actual_sha[:12]}... != esperado {expected_sha[:12]}...)")
+    return src
 
 
 def copy_mockup_to_bundle(bundle_path: Path, uses_mockup: bool) -> Optional[str]:
     """
-    Si algun slide usa mockup directamente, copia el mockup al bundle.
-    Retorna la ruta relativa al bundle si se copio, None si no.
+    Si algun slide usa mockup directamente, copia el mockup ORIGINAL APROBADO al bundle
+    (copia binaria exacta). Si el bundle ya tiene un mockup distinto, se reemplaza por el
+    aprobado. Retorna la ruta relativa al bundle, None si ningun slide usa mockup.
+    Lanza MockupError si el mockup aprobado no esta disponible — nunca genera sustituto.
     """
     if not uses_mockup:
         return None
+    src = find_product_mockup()
     dest = bundle_path / "carousel" / "assets" / _BOOK_MOCKUP_BASENAME
-    if dest.exists():
-        return f"carousel/assets/{_BOOK_MOCKUP_BASENAME}"
-    src = find_product_mockup(bundle_path)
-    if src:
+    if not dest.exists() or _sha256(dest) != _sha256(src):
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dest)
-        return f"carousel/assets/{_BOOK_MOCKUP_BASENAME}"
-    return None
+    return f"carousel/assets/{_BOOK_MOCKUP_BASENAME}"
+
+
+# ---------------------------------------------------------------------------
+# Configuracion fija (ver SKILL.md "CONFIGURACION FIJA")
+# ---------------------------------------------------------------------------
+
+def apply_fixed_config(decisions: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Impone formato, producto y enlace fijos sobre claude_decisions.json (cualquier valor
+    distinto que traiga se ignora). Devuelve una copia; no modifica el dict original.
+    """
+    fixed = dict(decisions)
+    fixed["carousel_type"] = FIXED_CAROUSEL_TYPE
+    fixed["product"] = {"product_name": FIXED_PRODUCT_NAME, "purchase_url": FIXED_PURCHASE_URL}
+    copy_data = dict(decisions.get("copy") or {})
+    copy_data["product"] = FIXED_PRODUCT_NAME
+    copy_data["purchase_url"] = FIXED_PURCHASE_URL
+    fixed["copy"] = copy_data
+    return fixed
+
+
+def validate_fixed_rules(decisions: Dict[str, Any]) -> List[str]:
+    """
+    Reglas fijas que NO dependen del brief construido: 10 slides exactos (sin repetir
+    texto para rellenar), descripcion/CTA no vacios, exactamente 8 hashtags y ningun
+    enlace distinto del fijo dentro del copy. Retorna lista de errores (vacia = OK).
+    """
+    errors: List[str] = []
+    slides = decisions.get("slides") or []
+    if len(slides) < FIXED_SLIDE_COUNT:
+        errors.append(
+            f"El copy no alcanza para construir exactamente {FIXED_SLIDE_COUNT} slides sin "
+            f"inventar ni repetir texto (se recibieron {len(slides)} slides). Proporciona un "
+            f"copy mas extenso."
+        )
+    elif len(slides) > FIXED_SLIDE_COUNT:
+        errors.append(f"brief tiene {len(slides)} slides, se requieren exactamente {FIXED_SLIDE_COUNT}")
+
+    seen: Dict[str, Any] = {}
+    for s in slides:
+        key = " ".join(str(s.get("exact_text", "")).lower().split())
+        if key and key in seen:
+            errors.append(
+                f"Slides {seen[key]} y {s.get('number', '?')} repiten el mismo texto — no se "
+                f"permite repetir contenido para completar {FIXED_SLIDE_COUNT} slides"
+            )
+        elif key:
+            seen[key] = s.get("number", "?")
+
+    copy_data = decisions.get("copy") or {}
+    for field in ("description", "cta"):
+        if not str(copy_data.get(field) or "").strip():
+            errors.append(f"copy.{field} esta vacio — nunca puede omitirse")
+    hashtags = copy_data.get("hashtags") or []
+    if len(hashtags) != FIXED_HASHTAG_COUNT:
+        errors.append(f"copy.hashtags tiene {len(hashtags)} hashtags, se requieren exactamente {FIXED_HASHTAG_COUNT}")
+    bad = [h for h in hashtags if not isinstance(h, str) or not re.fullmatch(r"#\S+", h)]
+    if bad:
+        errors.append(f"hashtags invalidos (deben empezar con # y no tener espacios): {bad}")
+    if len({str(h).lower() for h in hashtags}) != len(hashtags):
+        errors.append("copy.hashtags tiene hashtags repetidos")
+    for field in ("description", "cta"):
+        for url in _URL_RE.findall(str(copy_data.get(field) or "")):
+            if url.rstrip(".,;:)") != FIXED_PURCHASE_URL:
+                errors.append(f"copy.{field} contiene un enlace distinto del fijo: {url}")
+    return errors
 
 
 # ---------------------------------------------------------------------------
@@ -306,8 +390,8 @@ def validate_brief_in_memory(brief: Dict[str, Any]) -> List[str]:
     if not slides:
         errors.append("brief no tiene slides")
         return errors
-    if len(slides) > 10:
-        errors.append(f"brief tiene {len(slides)} slides, maximo 10")
+    if len(slides) != FIXED_SLIDE_COUNT:
+        errors.append(f"brief tiene {len(slides)} slides, se requieren exactamente {FIXED_SLIDE_COUNT}")
     for s in slides:
         n = s.get("number", "?")
         for field in REQUIRED_SLIDE_FIELDS:
@@ -359,6 +443,15 @@ def main() -> int:
         print("STOP: decisions JSON no tiene 'bundle_id'")
         return 1
 
+    # Configuracion fija (formato, producto, enlace) + reglas fijas, ANTES de crear nada
+    decisions = apply_fixed_config(decisions)
+    fixed_errors = validate_fixed_rules(decisions)
+    if fixed_errors:
+        print("STOP: Configuracion fija no cumplida:")
+        for e in fixed_errors:
+            print(f"  - {e}")
+        return 1
+
     # 2. Crear bundle + directorios
     bundle_path = OUTPUTS_DIR / bundle_id
     (bundle_path / "carousel" / "assets").mkdir(parents=True, exist_ok=True)
@@ -404,7 +497,12 @@ def main() -> int:
         print(f"[WARN] {w}")
 
     # 7. Construir brief en memoria
-    brief = build_brief(decisions, bundle_id, bundle_path, timing)
+    try:
+        brief = build_brief(decisions, bundle_id, bundle_path, timing)
+    except MockupError as e:
+        print(f"STOP: No se puede mostrar {FIXED_PRODUCT_NAME} sin su mockup original aprobado: {e}")
+        print("      No se genera ningun mockup sustituto. Restaura el archivo original y vuelve a ejecutar.")
+        return 1
     timing["T6"] = _now_iso()
     print(f"[T6] Brief construido en memoria")
 

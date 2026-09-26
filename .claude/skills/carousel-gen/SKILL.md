@@ -1,6 +1,6 @@
 ---
 name: carousel-gen
-description: FABRICA RAPIDA Y AUTONOMA — transforma un post/copy viral de referencia (imagen OBLIGATORIA) en un carrusel Instagram de MAXIMO 10 slides (limite obligatorio para compatibilidad Facebook+Instagram), en uno de 7 formatos narrativos, usando Google Gemini (Nano Banana 2 Lite, generacion DIRECTA y PARALELA — Batch queda desactivado por defecto, ver "COST OPTIMIZATION") con Kie AI como generador legacy desactivado por defecto. El estilo visual se detecta automaticamente de la imagen de referencia en cada ejecucion (no hay biblioteca de estilos). De brief aprobado a paquete final (slides + COPY_FINAL.txt + COSTO_CARRUSEL.txt) en ~5 minutos en condiciones normales, sin ciclos de correccion sin limite. Genera imagenes verticales 4:5.
+description: FABRICA RAPIDA Y AUTONOMA — el usuario solo aporta una imagen de referencia + el copy; todo lo demas es FIJO (Carrusel Interactivo, exactamente 10 slides, producto EL DOLOR QUE NO TE PERTENECE con enlace fijo, 8 hashtags, sin preguntas). Transforma ese post/copy viral en un carrusel Instagram (compatibilidad Facebook+Instagram), usando Google Gemini (Nano Banana 2 Lite, generacion DIRECTA y PARALELA — Batch queda desactivado por defecto, ver "COST OPTIMIZATION") con Kie AI como generador legacy desactivado por defecto. El estilo visual se detecta automaticamente de la imagen de referencia en cada ejecucion (no hay biblioteca de estilos). De brief a paquete final (carousel/ 10 PNG + copy/ COPY_FINAL/DESCRIPCION/CTA/HASHTAGS + brief.json + COSTO_CARRUSEL.txt) en ~5 minutos en condiciones normales, con maximo 2 regeneraciones automaticas por slide y sin preguntas: siempre termina y registra los slides pendientes. Genera imagenes verticales 4:5.
 allowed-tools: Read, Write, Bash(python3:*), Bash(cd:*), Bash(curl:*), Bash(ls:*), Bash(mkdir:*), Bash(cp:*), Bash(export:*), Bash(pip3:*), Glob, Grep, AskUserQuestion, Edit
 user-invocable: true
 ---
@@ -17,17 +17,123 @@ se detecta automaticamente de la imagen de referencia, en cada ejecucion.
 /carousel-gen
 ```
 
-No requiere parametros. El flujo pide todo lo necesario paso a paso, empezando siempre
-por la imagen de referencia.
+No requiere parametros. El usuario SOLO proporciona **la imagen de referencia** y **el
+texto/copy del carrusel**. Todo lo demas esta fijado en "CONFIGURACIÓN FIJA" (abajo) y
+NUNCA se pregunta.
+
+## CONFIGURACIÓN FIJA (regla obligatoria y permanente — prevalece sobre cualquier otra sección)
+
+Estas decisiones ya estan tomadas. Claude NUNCA las pregunta, NUNCA pide confirmacion y
+NUNCA las cambia aunque el usuario no las mencione. Si otra seccion de este documento
+dice "preguntar", "confirmar" o "elegir" alguno de estos puntos, manda ESTA seccion.
+
+| Decision | Valor fijo | Donde se impone en codigo |
+|---|---|---|
+| Entrada del usuario | Imagen de referencia + texto/copy. Nada mas. | — |
+| Formato | **Carrusel Interactivo** (`carousel_type = "carrusel_interactivo"`) | `carousel_common.FIXED_CAROUSEL_TYPE` |
+| Cantidad de slides | **Exactamente 10** | `carousel_common.FIXED_SLIDE_COUNT` |
+| Producto | **EL DOLOR QUE NO TE PERTENECE** | `carousel_common.FIXED_PRODUCT_NAME` |
+| Enlace | `https://eldolorquenotepertenece.com?utm_source=facebook&utm_medium=organic&utm_campaign=constelaciones_familiares&utm_content=DP-CF001` (exacto, sin pedir confirmacion, nunca otro) | `carousel_common.FIXED_PURCHASE_URL` (igual en `products.json`) |
+| Hashtags | **Exactamente 8** | `carousel_common.FIXED_HASHTAG_COUNT` |
+| Descripcion, CTA, hashtags | Claude los redacta SIEMPRE a partir del copy y del carrusel (PASO 10.2-10.4). Nunca se omiten ni se preguntan. | `prepare_carousel.validate_fixed_rules` |
+| Mockup del producto | El mockup ORIGINAL aprobado: `products.json` → `mockup_path` + `mockup_sha256` (`0f8853cb…`) | `prepare_carousel.find_product_mockup` |
+
+**Preguntas prohibidas**: formato, cantidad de slides, tipo de carrusel, producto,
+enlace, CTA, descripcion, hashtags, aprobacion del brief o cualquier otra decision de
+esta tabla. Las UNICAS paradas permitidas son: falta la imagen (PASO 1), falta el copy
+(PASO 3), el copy no alcanza para 10 slides (abajo) o falta el mockup original (abajo).
+
+**`prepare_carousel.py` es la compuerta tecnica**: sobrescribe `carousel_type` y
+`product` con los valores fijos, escribe `copy.json` con el producto/enlace fijos y
+detiene la ejecucion (`STOP`, exit 1, sin crear el bundle) si: hay menos o mas de 10
+slides, dos slides repiten el mismo `exact_text`, faltan descripcion o CTA, no hay
+exactamente 8 hashtags (cada uno `#sinEspacios`, sin repetir), o el copy contiene un
+enlace distinto del fijo.
+
+**Copy insuficiente para 10 slides**: si el copy no tiene contenido suficiente para
+repartirlo en exactamente 10 slides SIN inventar texto y SIN repetir contenido, Claude NO
+inventa, NO repite, NO rellena y NO pregunta nada: se detiene con este mensaje claro:
+> "STOP: El copy proporcionado no alcanza para construir exactamente 10 slides sin
+> inventar ni repetir texto. Proporciona un copy mas extenso."
+(Es el mismo mensaje con el que `prepare_carousel.py` se detiene si recibe menos de 10
+slides.) La regla de fidelidad (seccion siguiente) sigue mandando: 10 slides nunca
+autoriza inventar contenido.
+
+**Mockup original**: cuando un slide muestra EL DOLOR QUE NO TE PERTENECE
+(`uses_product_mockup_directly: true`, normalmente el slide 10 de CTA), se usa UNICAMENTE
+el archivo de `products.json` → `mockup_path`, verificado con `mockup_sha256`. Nunca se
+busca en bundles anteriores, nunca se crea ni se genera un mockup sustituto. Si el archivo
+no existe o su sha256 no coincide, `prepare_carousel.py` se DETIENE explicando que falta
+— Claude informa al usuario que archivo falta y no continua ese paso.
+
+### REGLA PERMANENTE DE REGENERACIÓN (autonomía total — prevalece sobre cualquier otra sección)
+
+La prioridad de carousel-gen es ser AUTÓNOMA y TERMINAR el carrusel sin preguntas ni
+esperas de aprobacion. Por cada slide:
+
+```
+intento inicial -> QA -> (error) regeneracion 1 -> QA -> (error) regeneracion 2 -> QA -> FIN
+```
+
+1. Se generan los 10 slides y se ejecuta el QA (estructural + Text QA) de cada uno.
+2. Si un slide tiene un error CRITICO, se regenera AUTOMATICAMENTE (mismo prompt, nunca
+   otro) y se vuelve a pasar el QA.
+3. **Maximo 2 regeneraciones automaticas por slide** (3 intentos en total). Techo duro en
+   codigo: `gemini_config.MAX_REGENERATIONS = 2` (`MAX_RETRIES` en `.env` puede bajarlo,
+   nunca subirlo). El bucle de `process_slides()` tiene un numero fijo de rondas
+   (`range(MAX_REGENERATIONS + 1)`): **nunca existe un ciclo infinito**.
+4. Si tras la regeneracion 2 el slide sigue con error: NO se regenera otra vez, NO se
+   pregunta, NO se detiene el carrusel — se CONSERVA la ultima version generada, se
+   registra el problema (`TEXT_QA_FAILED`/`FAILED_FINAL`) y el pipeline continua.
+5. El carrusel SIEMPRE termina y entrega: 10 PNG, `copy/` (4 archivos, 8 hashtags),
+   `brief.json`, `COSTO_CARRUSEL.txt` y los archivos tecnicos. Unica excepcion fisica: si
+   Gemini no devuelve NINGUNA imagen de un slide en sus 3 intentos (API caida/cuota),
+   ese PNG no existe — nunca se fabrica uno; el resto se entrega y el slide queda
+   registrado como `MISSING_PNG`.
+6. Cada llamada a Gemini tiene un tiempo maximo (`GEMINI_REQUEST_TIMEOUT_SECONDS` = 120 s):
+   una llamada colgada falla y consume un intento, nunca bloquea el pipeline.
+7. Los slides pendientes quedan registrados en `COSTO_CARRUSEL.txt` (seccion "SLIDES CON
+   ADVERTENCIA"), `pipeline_result.json` (`warnings`), `carousel/manifest.json`
+   (`text_qa.pending_slides`) y en el informe final (PASO 11). El usuario los revisa
+   DESPUES; durante la ejecucion Claude NUNCA pregunta por regenerar slides, aprobar
+   imagenes, errores de OCR ni ninguna decision de esta configuracion fija.
+8. **El QA no aprueba errores reales** (ver "TEXT QA"): palabras faltantes, duplicadas o
+   añadidas son CRITICAL aunque el OCR tenga baja confianza. **Y no rechaza imagenes
+   correctas por una mala lectura del OCR**: antes de declarar CRITICAL relee la imagen
+   con lecturas OCR alternativas (ampliada y binarizada); si alguna sale sin errores
+   estructurales, era un fallo del OCR y la imagen se aprueba (caso real: slide 10 en
+   cursiva de la prueba 2026-09-26). El ruido de letras palabra por palabra (acentos, ñ,
+   una letra confundida) queda UNCERTAIN: aprobado y registrado, sin regenerar.
+
+**Salida obligatoria de cada ejecucion** (bundle en `outputs/bundles/<bundle_id>/` y
+copia archivada automaticamente en la carpeta local ya configurada
+`C:\Users\USUARIO\Downloads\Carruseles Carousel-Gen\<bundle_id>\` — `carousel_common.DOWNLOADS_EXPORT_DIR`):
+
+```
+<bundle_id>/
+├── carousel/
+│   ├── carousel-01.png … carousel-10.png
+├── copy/
+│   ├── COPY_FINAL.txt      (descripcion + CTA + enlace + hashtags, unificado)
+│   ├── DESCRIPCION.txt
+│   ├── CTA.txt             (CTA con el enlace fijo al final)
+│   └── HASHTAGS.txt        (exactamente 8, una linea)
+├── brief.json
+└── COSTO_CARRUSEL.txt
+```
+`COPY_FINAL.txt` existe SOLO en `copy/` — nunca en la raiz del bundle. Se conservan
+ademas los archivos tecnicos existentes (`carousel/manifest.json`, `carousel/assets/`,
+`cost_log.json`, `copy.json`, `pipeline_input.json`, `pipeline_result.json`, caches).
+En la copia archivada tambien va `manifest.json` en la raiz.
 
 ## FAST_PREP — Preparación express (PASO 0-8 en ≤ 60 segundos)
 
-**FAST_PREP se activa automáticamente** cuando el mensaje inicial contiene TODO lo siguiente:
+**FAST_PREP es el camino POR DEFECTO** y se activa cuando el mensaje contiene los dos
+unicos inputs del usuario (ver "CONFIGURACIÓN FIJA"):
 1. Imagen de referencia viral adjunta
 2. `source_text` completo (texto pegado en el mismo mensaje)
-3. Tipo de carrusel elegido (nombre del formato)
-4. Número de slides (número exacto o la palabra "recomienda")
-5. Producto (nombre o "ninguno")
+
+Formato, cantidad de slides y producto NO son inputs: vienen de la configuracion fija.
 
 Cuando FAST_PREP está activo, los PASOS 0-8 colapsan en **3 acciones y ≤ 4 tool calls**:
 
@@ -66,9 +172,9 @@ previo de texto visible al usuario.
 del JSON. El `visual_dna` completo, el `reference_analysis` y los 16 campos por slide aparecen
 dentro de `claude_decisions.json`.
 
-**Cuando FAST_PREP NO aplica** (flujo normal de 11 PASOS interactivos):
-- El usuario no proporcionó alguno de los 5 inputs en el primer mensaje
-- El usuario quiere ser guiado paso a paso (inició solo con `/carousel-gen`)
+**Cuando FAST_PREP NO aplica**: solo cuando falta la imagen o el copy. Se pide
+UNICAMENTE lo que falta (PASO 1 / PASO 3) y, en cuanto llega, se continua en FAST_PREP.
+Los PASOS 4, 5 y 7 ya no hacen preguntas (ver "CONFIGURACIÓN FIJA").
 
 ## FIDELIDAD DEL CONTENIDO ORIGINAL (regla obligatoria y permanente, prioridad maxima)
 
@@ -206,8 +312,9 @@ no solo recomendarlo.
 ### Regla numerica
 
 - Maximo permitido: **10 slides**. Nunca 11, 12, 15, 20 ni ningun numero superior.
-- Puede generar MENOS de 10 cuando el contenido no necesite 10 (el limite es un techo, no
-  un piso ni un numero fijo obligatorio — ver PASO 5).
+- **CONFIGURACIÓN FIJA: siempre EXACTAMENTE 10** (ni menos ni mas). Si el copy no alcanza
+  para 10 slides sin inventar ni repetir, la ejecucion se DETIENE (ver "CONFIGURACIÓN
+  FIJA") — nunca se genera un carrusel con menos slides ni se rellena.
 - Aplica a TODOS los carruseles futuros, sin excepcion, independientemente del tema,
   formato narrativo, producto asociado o cantidad de contenido fuente.
 
@@ -278,7 +385,8 @@ INPUT -> [PASO 1: guardar viral-reference.png o STOP] -> analisis ADN -> brief
   -> auditoria de fidelidad (PASO 6.5) -> mostrar tabla -> [PASO 9: generacion automatica]
   -> generacion PARALELA (Slide 1 solo, luego slides 2-10 en una unica tanda paralela)
   -> QA rapido (estructural + Text QA local)
-  -> maximo 1 regeneracion por slide, SOLO si el fallo es CRITICO
+  -> maximo 2 regeneraciones automaticas por slide, SOLO si el fallo es CRITICO
+     (despues: se conserva la ultima imagen, se registra el aviso y se continua)
   -> exportacion -> COPY_FINAL.txt -> COSTO_CARRUSEL.txt -> informe final -> TERMINADO
 ```
 
@@ -299,29 +407,32 @@ regenera imagenes de bundles historicos; ni ejecuta ciclos de QA sin limite.
    slide 2 → esperar → slide 3 → esperar...) salvo la dependencia real e inevitable: el
    Slide 1 debe existir primero porque es el ancla visual de los demas. Ver "Slide 1 =
    ancla visual maestra" arriba y "COST OPTIMIZATION" › "DIRECT MODE vs BATCH MODE".
-3. **Maximo 2 intentos por slide** (`MAX_RETRIES=1` = 1 intento inicial + 1 regeneracion
-   como maximo), y esa regeneracion SOLO por error CRITICO — nunca por diferencias
-   esteticas, de composicion o dudas menores de OCR. Ver "COST OPTIMIZATION" › "Retries y
-   QA" y "TEXT QA" › "Severidad".
-4. **Definicion de CRITICO** (dispara la unica regeneracion permitida): texto omitido,
+3. **Maximo 3 intentos por slide** (1 intento inicial + como maximo 2 regeneraciones,
+   techo duro `MAX_REGENERATIONS=2`), y cada regeneracion SOLO por error CRITICO — nunca
+   por diferencias esteticas, de composicion o dudas menores de OCR. Ver "CONFIGURACIÓN
+   FIJA" › "REGLA PERMANENTE DE REGENERACIÓN" y "TEXT QA" › "Severidad".
+4. **Definicion de CRITICO** (dispara una regeneracion, maximo 2 por slide): texto omitido,
    texto inventado, palabra cambiada, frase duplicada, texto ilegible, slide corrupto,
    proporcion incorrecta, imagen incompatible con el brief, mockup incorrecto cuando el
    brief exige uno real, referencia visual obligatoria ignorada en el Slide 1.
    **Definicion de NO CRITICO** (nunca regenera): espaciado, salto de linea, alineacion,
    tamaño de letra, composicion "mejorable", diferencia estetica subjetiva, OCR dudoso
    (ver "TEXT QA" › "Severidad"), un detalle de renderizado que no cambia el contenido.
-5. **OCR dudoso nunca bloquea**: si Tesseract no esta disponible, o si esta disponible
-   pero su confianza sobre una imagen es baja, el pipeline NUNCA se detiene por eso — ver
-   "TEXT QA" › "Severidad".
-6. **Un unico archivo de copy** (`COPY_FINAL.txt`) y **un unico archivo de costo/tiempo**
-   (`COSTO_CARRUSEL.txt`, ver seccion propia mas abajo) — nunca archivos fragmentados por
-   slide ni por seccion.
+5. **OCR dudoso nunca bloquea**: si Tesseract no esta disponible, o si solo hay ruido de
+   letras (acentos, ñ, una letra confundida), el pipeline NUNCA se detiene por eso. Un
+   error estructural (palabras faltantes/duplicadas/añadidas) confirmado en todas las
+   lecturas OCR si dispara regeneracion — ver "TEXT QA" › "Severidad". Nada de esto
+   detiene el carrusel: tras las 2 regeneraciones maximas, se registra y se continua.
+6. **Copy en `copy/`** (`COPY_FINAL.txt` unificado + `DESCRIPCION.txt` + `CTA.txt` +
+   `HASHTAGS.txt`, ver "CONFIGURACIÓN FIJA") y **un unico archivo de costo/tiempo**
+   (`COSTO_CARRUSEL.txt`, ver seccion propia mas abajo) — nunca archivos por slide.
 7. **Sin aprobaciones intermedias dentro del flujo normal**: la orden del usuario de crear
    el carrusel autoriza TODO el pipeline (analizar → brief → validar → generar → QA →
    corregir maximo una vez → exportar → COPY_FINAL.txt → COSTO_CARRUSEL.txt → finalizar).
-   Los unicos puntos que SI requieren respuesta del usuario son inputs reales que nadie
-   mas puede decidir (imagen de referencia, texto fuente, formato, cantidad de slides,
-   producto, aprobacion del brief — PASOS 1-8) — nunca una pregunta tipo "¿quieres que
+   Los unicos puntos que SI requieren respuesta del usuario son los dos inputs reales
+   (imagen de referencia y texto fuente — PASOS 1 y 3). Formato, cantidad de slides,
+   producto y enlace son fijos y el brief NO requiere aprobacion (ver "CONFIGURACIÓN
+   FIJA") — nunca una pregunta tipo "¿quieres que
    genere/revise/continue?" durante el PASO 9 o el PASO 10. **UNA SOLA EJECUCION**: desde
    la aprobacion del brief (PASO 8), generar/QA/copy/manifest/costo/exportacion salen de
    una UNICA invocacion de `run_carousel_pipeline.py` (via `--copy-json`, ver PASO 9) —
@@ -368,6 +479,13 @@ el usuario las pida.
   SIEMPRE debe usarse como referencia visual directa. Ver regla completa en el PASO 8.
 
 ## Regla general: mockup de producto proporcionado por el usuario
+
+**CONFIGURACIÓN FIJA**: para EL DOLOR QUE NO TE PERTENECE el mockup NO lo adjunta el
+usuario: `prepare_carousel.py` copia automaticamente el original aprobado desde
+`products.json` → `mockup_path` (verificado con `mockup_sha256`) a
+`carousel/assets/book-mockup-original.png` y crea el bloque `product_mockup`. Nunca se
+toma de un bundle anterior. Si falta o no coincide el hash: STOP, sin sustituto (el punto
+1 de abajo — "cubierta generica como fallback" — NO aplica a este producto).
 
 Cuando el usuario adjunta o referencia el mockup/portada ORIGINAL de un producto propio
 (ej.: la portada real de su libro) para que aparezca en algun slide (normalmente el de
@@ -603,8 +721,10 @@ sin alterar al sujeto, la expresion, los elementos clave ni el hook.
 
 ## Workflow obligatorio (PASO 0 + 11 pasos, en orden — PASO 6.5 es una validacion intermedia bloqueante, no un paso numerado aparte)
 
-**REGLA PRINCIPAL**: NUNCA saltar pasos. NUNCA generar imagenes sin `brief.json` aprobado
-explicitamente por el usuario.
+**REGLA PRINCIPAL**: NUNCA saltar pasos. NUNCA generar imagenes sin `brief.json` validado
+por `prepare_carousel.py` (status `READY`). Con la CONFIGURACIÓN FIJA el brief NO requiere
+aprobacion explicita del usuario: los PASOS 4, 5 y 7 se resuelven solos con los valores
+fijos y el flujo continua sin preguntas.
 
 ### PASO 0: Verificaciones tecnicas (INVISIBLE al usuario)
 
@@ -852,13 +972,18 @@ UNICA fuente de contenido a redistribuir — nunca se resume, parafrasea ni reco
 pasar al PASO 4), registrar internamente el timestamp actual como
 `source_text_confirmed_at` (ver PASO 0 y PASO 8).
 
-### PASO 4: Elegir el tipo de carrusel
+### PASO 4: Tipo de carrusel — FIJO: Carrusel Interactivo (NO se pregunta)
 
-`AskUserQuestion` tiene un limite de 4 opciones por pregunta. Por eso se usan DOS preguntas
-secuenciales para exponer los 7 formatos. "Ver los otros 4 formatos" es solo navegacion,
-NO es un tipo de carrusel.
+**CONFIGURACIÓN FIJA**: el formato es SIEMPRE **Carrusel Interactivo**
+(`carousel_type = "carrusel_interactivo"`) — invita a quien lee a autoevaluarse o
+participar activamente (mini-test o pregunta de autoobservacion), distribuyendo el copy
+del usuario sin reescribirlo. NUNCA se usa `AskUserQuestion` aqui. `prepare_carousel.py`
+impone este valor aunque `claude_decisions.json` traiga otro.
 
-**Pregunta A** — mostrar siempre primero:
+Las tablas de abajo se conservan SOLO como referencia historica de los 7 formatos; ya no
+se muestran al usuario.
+
+**Pregunta A** (historica, ya no se muestra):
 
 | Opcion | Descripcion |
 |--------|-------------|
@@ -880,7 +1005,18 @@ Si el usuario elige "Ver los otros 4 formatos", mostrar inmediatamente la **Preg
 
 Tras la eleccion en la Pregunta B, continuar al PASO 5 con el formato seleccionado.
 
-### PASO 5: Recomendar y confirmar la cantidad de slides
+### PASO 5: Cantidad de slides — FIJA: exactamente 10 (NO se pregunta)
+
+**CONFIGURACIÓN FIJA**: siempre **exactamente 10 slides**. No se recomienda, no se
+pregunta, no se confirma. Claude reparte el copy completo en 10 slides (agrupando o
+separando unidades en cortes naturales, ver PASO 6/6.6), sin inventar ni repetir texto.
+Si el copy no alcanza para 10 slides con esas reglas, Claude se DETIENE con el mensaje de
+"CONFIGURACIÓN FIJA" (sin preguntar nada). Si el copy es extenso, se aumenta la densidad
+por slide dentro de los 10 (ver "LÍMITE OBLIGATORIO DE SLIDES"). `prepare_carousel.py`
+rechaza cualquier plan con un numero distinto de 10.
+
+El resto de este paso (texto historico abajo) queda SOLO como referencia de como se
+calculaba la recomendacion antes; ya no se presenta ninguna recomendacion al usuario.
 
 Calcular una cantidad RECOMENDADA en base a:
 - El formato elegido en el Paso 3 (cada formato tiene una logica narrativa distinta)
@@ -1125,9 +1261,24 @@ Si un formato no puede aplicarse sin inventar contenido (PASO 6, punto 4), infor
 al usuario ANTES de continuar y ofrecer alternativas (mas slides, otro formato, o pedir el
 contenido faltante) — nunca generar con el hueco relleno de contenido inventado.
 
-### PASO 7: Preguntar que libro/producto se va a promocionar (OBLIGATORIO, sin excepcion)
+### PASO 7: Producto — FIJO: EL DOLOR QUE NO TE PERTENECE (NO se pregunta)
 
-**Regla maestra — permanente, para TODOS los carruseles futuros**: antes de construir
+**CONFIGURACIÓN FIJA (reemplaza la pregunta de este paso)**: el producto es SIEMPRE
+**EL DOLOR QUE NO TE PERTENECE** y el enlace es SIEMPRE exactamente:
+
+`https://eldolorquenotepertenece.com?utm_source=facebook&utm_medium=organic&utm_campaign=constelaciones_familiares&utm_content=DP-CF001`
+
+Claude NO pregunta el producto, NO pide ni confirma el enlace y NO usa ningun otro
+(tampoco otros `utm_content`). En `claude_decisions.json` se escribe
+`"product": {"product_name": "EL DOLOR QUE NO TE PERTENECE", "purchase_url": "<enlace fijo>"}`;
+`prepare_carousel.py` lo impone igualmente sobre `brief.json` y `copy.json`, y detiene la
+ejecucion si la descripcion o el CTA contienen un enlace distinto. El mockup de este
+producto es el original aprobado (ver "CONFIGURACIÓN FIJA" › Mockup original).
+
+El texto de abajo se conserva SOLO como referencia historica del flujo anterior (la
+pregunta ya no se hace):
+
+**Regla maestra (historica)**: antes de construir
 `brief.json` (PASO 8), Claude SIEMPRE pregunta:
 
 > "¿Qué libro o producto vamos a promocionar en este carrusel?"
@@ -1224,7 +1375,7 @@ Claude construye este objeto en un bloque de codigo y luego lo escribe en UNA op
 {
   "bundle_id": "YYYY-MM-DD-slug",
   "source_text": "Texto completo del post viral tal como lo entrego el usuario",
-  "carousel_type": "revelacion_progresiva",
+  "carousel_type": "carrusel_interactivo",
   "visual_dna": {
     "slide_1_master_dna": {
       "fotografia": "BW alto contraste...",
@@ -1233,13 +1384,13 @@ Claude construye este objeto en un bloque de codigo y luego lo escribe en UNA op
     }
   },
   "product": {
-    "product_name": "Nombre exacto del producto o null",
-    "purchase_url": null
+    "product_name": "EL DOLOR QUE NO TE PERTENECE",
+    "purchase_url": "https://eldolorquenotepertenece.com?utm_source=facebook&utm_medium=organic&utm_campaign=constelaciones_familiares&utm_content=DP-CF001"
   },
   "copy": {
-    "description": "Descripcion del post (ver PASO 10.1-10.4)",
-    "cta": "CTA de publicacion",
-    "hashtags": ["#hashtag1", "#hashtag2", "..."]
+    "description": "Descripcion del post (ver PASO 10.2) — obligatoria",
+    "cta": "CTA emocional (ver PASO 10.3) — obligatorio; si incluye enlace, solo el fijo",
+    "hashtags": ["#uno", "#dos", "#tres", "#cuatro", "#cinco", "#seis", "#siete", "#ocho"]
   },
   "slides": [
     {
@@ -1259,9 +1410,11 @@ Claude construye este objeto en un bloque de codigo y luego lo escribe en UNA op
 }
 ```
 
-**Nota**: `product.purchase_url` puede ser `null` — `prepare_carousel.py` lo resuelve
-automaticamente desde `products.json` si el nombre coincide. Si el producto es nuevo, el
-usuario ya proporcionó la URL en el PASO 7 y Claude la pone directamente aqui.
+**Nota (CONFIGURACIÓN FIJA)**: `carousel_type`, `product` y `copy.product`/
+`copy.purchase_url` los impone `prepare_carousel.py` con los valores fijos aunque vengan
+distintos. `slides` debe tener EXACTAMENTE 10 elementos con `exact_text` distintos entre
+si; `copy.hashtags` EXACTAMENTE 8. Si algo de esto no se cumple, el script responde
+`STOP: Configuracion fija no cumplida` y no crea el bundle.
 
 #### Mostrar tabla de slides ANTES de ejecutar
 
@@ -1328,7 +1481,7 @@ referencia historica/documentacion — `prepare_carousel.py` la construye automa
   },
   "product_mockup": {
     "local_path": "carousel/assets/{nombre-descriptivo}.png",
-    "description": "SOLO si el usuario proporciono el mockup/portada real de un producto propio (ver regla general arriba). Omitir este bloque por completo si no aplica — es independiente de `product` (ese es el asset visual; `product` es el nombre/enlace elegido en el PASO 7)."
+    "description": "Lo crea prepare_carousel.py SOLO si algun slide tiene uses_product_mockup_directly=true: copia del mockup original aprobado (products.json -> mockup_path, verificado por sha256). Es independiente de `product` (ese es el asset visual; `product` es el nombre/enlace fijo)."
   },
   "visual_dna": { "...": "... (del Paso 2)" },
   "timing": {
@@ -1416,9 +1569,9 @@ completo (recorrer todos los `source_text_fragment` de todos los slides debe rec
 
 **IMPORTANTE — OBLIGATORIO**: el bloque `product` a nivel raiz es OBLIGATORIO en todo
 `brief.json` (ver `REQUIRED_BRIEF_TOP_FIELDS` en el script — compuerta tecnica, no solo
-instruccion). Debe existir siempre, resultado directo de la pregunta del PASO 7 — aunque
-sus dos campos internos (`product_name`, `purchase_url`) puedan ser `null` cuando el
-usuario indico que no hay producto para este carrusel. Nunca se omite el bloque completo.
+instruccion). Con la CONFIGURACIÓN FIJA siempre vale
+`{"product_name": "EL DOLOR QUE NO TE PERTENECE", "purchase_url": "<enlace fijo DP-CF001>"}`
+(lo impone `prepare_carousel.py`). Nunca se omite el bloque completo.
 
 5. Mostrar al usuario una tabla con estas 13 columnas por cada slide:
    Numero, Objetivo narrativo, Mensaje, Fragmento fuente (`source_text_fragment`),
@@ -1491,9 +1644,11 @@ PYTHONUNBUFFERED=1 python3 "$HOME/.claude/skills/carousel-gen/scripts/generate-c
   reservado para una futura modalidad masiva explicita (`--force-batch`), nunca el
   comportamiento por defecto.
 - Cada imagen generada pasa por QA automatico (archivo valido, dimensiones, relacion
-  4:5) y Text QA (texto renderizado). Si falla por un motivo CRITICO, se reintenta SOLO
-  ese slide, como maximo 1 vez (`MAX_RETRIES=1`) — nunca se regenera el carrusel completo
-  por el fallo de un slide, y nunca hay un tercer intento.
+  4:5) y Text QA (texto renderizado). Si falla por un motivo CRITICO, se regenera SOLO
+  ese slide, como maximo 2 veces (3 intentos en total, `MAX_REGENERATIONS=2`) — nunca se
+  regenera el carrusel completo por el fallo de un slide, nunca hay un cuarto intento, y
+  tras el ultimo se conserva la ultima imagen y se continua (ver "REGLA PERMANENTE DE
+  REGENERACIÓN").
 - El generador LEGACY de Kie AI (`generate-carousel.py`) sigue existiendo pero esta
   DESACTIVADO por defecto (`KIE_ENABLED=false`) — nunca se invoca automaticamente. Ver
   "COST OPTIMIZATION" para la migracion completa y cuando reactivarlo.
@@ -1525,21 +1680,21 @@ Si en cambio se usa `--add-copy` (correccion sobre un bundle ya generado, ver PA
 esa invocacion aparte tambien copia a Descargas al final, con el mismo efecto que el paso
 2 de arriba.
 
-El paquete final en Descargas siempre debe contener:
-- `carousel-01.png` ... `carousel-NN.png` (la cantidad real de slides del carrusel,
-  nunca un numero fijo)
-- `COPY_FINAL.txt` — UNICO archivo de copy de publicacion (descripcion + CTA + enlace de
-  compra + hashtags, ver "COPY_FINAL.txt — archivo unico de copy de publicacion" abajo).
-  **Ya NO se generan `description.txt`, `cta.txt` ni `hashtags.txt` como archivos
-  independientes** — esa fragmentacion quedo eliminada de forma permanente.
+El paquete final en Descargas siempre debe contener (estructura fija, ver
+"CONFIGURACIÓN FIJA"):
+- `carousel/carousel-01.png` ... `carousel/carousel-10.png`
+- `copy/COPY_FINAL.txt` (descripcion + CTA + enlace de compra + hashtags, unificado),
+  `copy/DESCRIPCION.txt`, `copy/CTA.txt` (con el enlace fijo al final) y
+  `copy/HASHTAGS.txt` (exactamente 8)
 - `COSTO_CARRUSEL.txt` — UNICO archivo de resumen de costo/tiempo (ver "COSTO_CARRUSEL.txt
-  — archivo obligatorio de costo y tiempo" abajo).
+  — archivo obligatorio de costo y tiempo" abajo). Como se escribe al final de la
+  corrida, el script lo copia al archivo local justo despues de crearlo.
 - `manifest.json` (el de `carousel/manifest.json`, copiado a la raiz de la subcarpeta)
 - `brief.json` (copia exacta, nunca modificada al copiarla)
-- `pipeline_result.json` — resultado estructurado del pipeline (generado por
-  `run_carousel_pipeline.py`; contiene status, slides, costo, tiempos T0-T5). Si el
-  PASO 9 se ejecuto con el controlador autonomo, este archivo esta disponible para una
-  sola operacion `Read` — ver PASO 11.
+
+`pipeline_result.json` (status, slides, costo, tiempos T0-T5, escrito por
+`run_carousel_pipeline.py`) vive en la raiz del BUNDLE y se lee de ahi con una sola
+operacion `Read` — ver PASO 11.
 
 **ELIMINADO definitivamente (ya no se genera):** `PARA FACEBOOK/` — subcarpeta que
 anteriormente contenia copias renombradas de cada slide. El fix de `mtime` sintetico
@@ -1635,6 +1790,10 @@ mismo modo RECHAZA guardar el paquete si hay `product` sin `purchase_url` — co
 tecnica que refuerza la regla de no finalizar incompleto.
 
 #### 10.1 — Resolver el producto ya elegido en el PASO 7 (nunca volver a preguntar aqui)
+
+**CONFIGURACIÓN FIJA**: el producto y el enlace son siempre los fijos (ver PASO 7), ya
+impuestos en `brief.json.product` y `copy.json` por `prepare_carousel.py` — este paso no
+tiene nada que resolver ni preguntar. El texto siguiente es referencia historica.
 
 El producto de este carrusel YA quedo decidido por el usuario en el PASO 7 y registrado en
 `brief.json.product`. Este paso NO vuelve a preguntar ni a inferir el producto — solo
@@ -1751,7 +1910,8 @@ El enlace de compra se agrega al final del CTA UNICAMENTE si `purchase_url` exis
 
 #### 10.4 — Hashtags
 
-Generar entre 8 y 10 hashtags especificos a: tematica del carrusel, dolor/problema
+Generar EXACTAMENTE 8 hashtags (CONFIGURACIÓN FIJA — ni 7 ni 9; cada uno empieza con
+`#`, sin espacios, sin repetir) especificos a: tematica del carrusel, dolor/problema
 tratado, nicho, relaciones, emociones, familia, sanacion, concepto especifico del
 contenido. NUNCA hashtags genericos de marketing (#marketing, #emprendedores, #negocios,
 #ventas, #dinero) salvo que el contenido realmente trate de eso.
@@ -1786,19 +1946,21 @@ python3 "$HOME/.claude/skills/carousel-gen/scripts/generate-carousel-gemini.py" 
 (El generador legacy `generate-carousel.py` acepta el mismo flag `--add-copy` con
 identico comportamiento, por si el bundle se genero con Kie AI.)
 
-Cualquiera de los dos caminos crea, dentro de la raiz del bundle
-(`outputs/bundles/[bundle_id]/`), UN UNICO archivo de copy de publicacion:
+Cualquiera de los dos caminos crea, dentro de la subcarpeta `copy/` del bundle
+(`outputs/bundles/[bundle_id]/copy/`), los 4 archivos de copy:
 
-- `COPY_FINAL.txt`
+- `COPY_FINAL.txt` (unificado — NUNCA en la raiz del bundle)
+- `DESCRIPCION.txt`
+- `CTA.txt` (si el CTA no incluye ya el enlace, se agrega al final)
+- `HASHTAGS.txt`
 
-**Ya NO se crean `description.txt`, `cta.txt` ni `hashtags.txt` como archivos
-independientes** — esa fragmentacion quedo eliminada de forma permanente (ver
-"COPY_FINAL.txt — archivo unico de copy de publicacion" mas abajo).
+El script rechaza guardar el copy (exit != 0, paquete incompleto) si descripcion o CTA
+estan vacios o si no hay exactamente 8 hashtags.
 
 Y fusiona en `carousel/manifest.json` (sin tocar el resto del manifest ni la lista de
 slides): `"description"`, `"cta"`, `"hashtags"`, `"product"`, `"purchase_url"` — con
 `null`/`[]` cuando algun dato no existe, nunca inventado — y `"copy_final_file"`, que
-registra que el archivo fisico de publicacion es `COPY_FINAL.txt`. Los campos
+registra que el archivo fisico de publicacion es `copy/COPY_FINAL.txt`. Los campos
 `description`/`cta`/`hashtags`/`product`/`purchase_url` del manifest se mantienen como
 metadatos estructurados internos utiles (por ejemplo para reconstruir `COPY_FINAL.txt` si
 hiciera falta) — el archivo de publicacion en si sigue siendo unicamente `COPY_FINAL.txt`.
@@ -1927,10 +2089,17 @@ COSTO_CARRUSEL:
 
 Downloads:
 <ruta>
+
+Slides con advertencia (revisar antes de publicar):
+Ninguno  |  Slide N: <estado> tras X intentos — <motivo>
 ```
 
 Los valores de `Generados`/`Reutilizados`/`Regenerados`/`Retries`/`Costo` se leen
-directamente de `COSTO_CARRUSEL.txt` (nunca se recalculan a mano ni se inventan).
+directamente de `COSTO_CARRUSEL.txt` (nunca se recalculan a mano ni se inventan). La
+lista "Slides con advertencia" sale de `pipeline_result.json` → `warnings` (o de la
+seccion "SLIDES CON ADVERTENCIA" de `COSTO_CARRUSEL.txt`): slides que agotaron las 2
+regeneraciones automaticas sin pasar QA (se entrego su ultima version) o sin PNG. Se
+INFORMAN, nunca se convierten en una pregunta ni en una propuesta de regenerar.
 
 **Alternativa estructurada (una sola operacion `Read`)**: cuando el PASO 9 se ejecuto con
 `run_carousel_pipeline.py`, el archivo `pipeline_result.json` en la raiz del bundle
@@ -1964,24 +2133,30 @@ corrigio, `Inventado` NUNCA se reporta como `0%` — se reporta el valor real y 
 
 **Después de este informe: DETENERSE.** No buscar errores adicionales, no hacer "una
 ultima revision", no regenerar nada, no modificar ningun archivo del bundle ni tocar
-bundles historicos, no sugerir mejoras o regeneraciones adicionales de forma proactiva.
+bundles historicos, no sugerir mejoras o regeneraciones adicionales de forma proactiva,
+no preguntar si se regeneran los slides con advertencia (ver "REGLA PERMANENTE DE
+REGENERACIÓN": el sistema ya hizo el maximo de 2 regeneraciones automaticas).
 Si el usuario pide un cambio despues de este informe, eso es una nueva solicitud
 explicita — se trata como tal (puede implicar `--regenerate-slides` sobre el MISMO
 bundle, nunca como continuacion automatica del mismo ciclo de correccion).
 
-## COPY_FINAL.txt — archivo unico de copy de publicacion (regla obligatoria y permanente)
+## COPY_FINAL.txt y la carpeta copy/ (regla obligatoria y permanente)
 
-**Regla permanente de `carousel-gen`, aplica a TODOS los carruseles futuros, sin
-excepcion.** El copy de publicacion (descripcion, CTA, enlace de compra y hashtags) NUNCA
-se entrega como archivos separados. Se entrega SIEMPRE como un unico archivo:
+**Regla permanente de `carousel-gen` (CONFIGURACIÓN FIJA), aplica a TODOS los carruseles
+futuros, sin excepcion.** El copy de publicacion vive en la subcarpeta `copy/` del bundle
+(y de la copia archivada), con 4 archivos:
 
 ```
-COPY_FINAL.txt
+copy/
+├── COPY_FINAL.txt   (unificado: descripcion + CTA + enlace + hashtags)
+├── DESCRIPCION.txt
+├── CTA.txt          (CTA + enlace fijo al final si el CTA no lo incluye)
+└── HASHTAGS.txt     (exactamente 8, en una linea)
 ```
 
-`COPY_FINAL.txt` es el archivo principal que el usuario abre para copiar y pegar
-directamente el contenido de publicacion — no debe ser necesario abrir varios archivos
-para obtener el copy completo.
+`COPY_FINAL.txt` sigue siendo el archivo principal para copiar y pegar todo el copy de una
+vez; los otros tres permiten copiar cada parte por separado. `COPY_FINAL.txt` NUNCA se
+escribe en la raiz del bundle.
 
 ### Estructura obligatoria
 
@@ -2002,8 +2177,7 @@ CTA
 ENLACE DE COMPRA
 ========================================
 
-[URL exacta del producto, o "(sin producto asociado en este carrusel)" si el PASO 7 se
-resolvio explicitamente sin producto — nunca una URL inventada]
+[URL fija de EL DOLOR QUE NO TE PERTENECE (utm_content=DP-CF001) — nunca otra]
 
 ========================================
 HASHTAGS
@@ -2012,16 +2186,11 @@ HASHTAGS
 [hashtags]
 ```
 
-### Que archivos YA NO se generan
+### Nombres historicos que ya no se usan
 
-A partir de esta modificacion, `carousel-gen` **NO genera** como archivos independientes:
-
-- `description.txt`
-- `cta.txt`
-- `hashtags.txt`
-
-El copy de publicacion existe UNICAMENTE como `COPY_FINAL.txt`. No se mantienen
-duplicados innecesarios del mismo contenido en archivos sueltos.
+Los antiguos `description.txt`, `cta.txt` y `hashtags.txt` (en minusculas, en la raiz del
+bundle) NO se generan. Su contenido ahora esta en `copy/DESCRIPCION.txt`, `copy/CTA.txt`
+y `copy/HASHTAGS.txt`.
 
 ### Que NO cambia (metadatos internos)
 
@@ -2032,7 +2201,7 @@ eliminar informacion del sistema — se mantienen sin cambios:
   y el resto de campos existentes, ver PASO 7 y PASO 8)
 - `carousel/manifest.json` (sigue registrando `description`/`cta`/`hashtags`/`product`/
   `purchase_url` como metadatos estructurados utiles, ademas de `copy_final_file` que
-  apunta a `COPY_FINAL.txt` — ver PASO 10.5)
+  apunta a `copy/COPY_FINAL.txt` — ver PASO 10.5)
 - `products.json`
 - `cost_log.json`
 - logs tecnicos, archivos de QA, cache (`.generation_cache.json`, `.batch_state.json`) y
@@ -2059,11 +2228,9 @@ REDACTA el copy. Siguen aplicando integramente las reglas ya existentes:
   el producto, sin promesas inventadas, y usando la URL exacta proporcionada por el
   usuario (ver PASO 10.3).
 - Los hashtags siguen siendo relevantes al tema y al producto (ver PASO 10.4).
-- La pregunta obligatoria del PASO 7 (*"¿Qué libro o producto vamos a promocionar en este
-  carrusel?"*) sigue haciendose para cada carrusel nuevo. Una vez elegido el producto: se
-  registra `product` y `purchase_url`, se usa la URL exacta (nunca inventada), y se
-  incluye en `COPY_FINAL.txt`. Si el producto no tiene URL valida, la entrega final queda
-  BLOQUEADA (ver "Regla de no finalizar incompleto", PASO 10).
+- El producto y el enlace son FIJOS (ver "CONFIGURACIÓN FIJA" y PASO 7): nunca se
+  pregunta. Se registran `product` y `purchase_url` fijos, y el enlace fijo se incluye en
+  `copy/COPY_FINAL.txt` y `copy/CTA.txt`.
 
 ## COSTO_CARRUSEL.txt — archivo obligatorio de costo y tiempo (regla obligatoria y permanente)
 
@@ -2297,10 +2464,16 @@ El bundle completo (fuente de verdad) vive dentro de la instalacion del skill:
 ```
 outputs/bundles/[bundle_id]/
 ├── brief.json                       # Fuente de verdad: referencia, ADN visual, formato, slides
-├── COPY_FINAL.txt                   # PASO 10: UNICO archivo de copy (descripcion+CTA+enlace+hashtags, OBLIGATORIO)
+├── COSTO_CARRUSEL.txt               # Costo y tiempo (OBLIGATORIO)
+├── copy/                            # PASO 10 (OBLIGATORIO, ver "CONFIGURACIÓN FIJA")
+│   ├── COPY_FINAL.txt               # descripcion+CTA+enlace+hashtags unificado (NUNCA en la raiz)
+│   ├── DESCRIPCION.txt
+│   ├── CTA.txt
+│   └── HASHTAGS.txt                 # exactamente 8
 ├── cost_log.json                    # Interno (COST OPTIMIZATION) — NUNCA se copia a Descargas
+├── copy.json, pipeline_input.json, pipeline_result.json, claude_decisions.json  # Tecnicos
 └── carousel/
-    ├── carousel-01.png through carousel-NN.png
+    ├── carousel-01.png through carousel-10.png
     ├── manifest.json                # incluye description/cta/hashtags/product/purchase_url/copy_final_file (PASO 10)
     ├── carousel-assets-needed.md    # Guia de logos opcionales
     ├── .generation_cache.json       # Interno (cache/reuso) — NUNCA se copia a Descargas
@@ -2317,9 +2490,16 @@ publicar, independiente del bundle original:
 
 ```
 C:\Users\USUARIO\Downloads\Carruseles Carousel-Gen\[bundle_id]\
-├── carousel-01.png
-├── carousel-02.png
-└── ... (los N slides finales del carrusel, sin manifest/assets/md)
+├── carousel/
+│   ├── carousel-01.png … carousel-10.png
+├── copy/
+│   ├── COPY_FINAL.txt
+│   ├── DESCRIPCION.txt
+│   ├── CTA.txt
+│   └── HASHTAGS.txt
+├── brief.json
+├── COSTO_CARRUSEL.txt
+└── manifest.json                    # (sin assets/ ni archivos internos)
 ```
 
 ## Tiempos y Costos
@@ -2427,24 +2607,25 @@ normales). `process_slides()` (`generate-carousel-gemini.py`) ya NO lee
    `prompt_hash` cambia automaticamente y el slide se regenera — nunca se reutiliza una
    imagen desactualizada.
 
-### Retries y QA (regla obligatoria y permanente: maximo 2 intentos, nunca ciclos sin limite)
+### Retries y QA (regla obligatoria y permanente: maximo 3 intentos, nunca ciclos sin limite)
 
-**Presupuesto UNICO de reintentos**: `MAX_RETRIES` (por defecto **1**) aplica por igual a
-fallos de generacion (error de la API), rechazos de QA estructural Y rechazos de Text
-QA — un solo contador compartido, nunca dos presupuestos apilables. Esto significa,
-para CUALQUIER slide: **1 intento inicial + como maximo 1 regeneracion = 2 intentos
-totales**, y esa unica regeneracion solo se dispara por un motivo CRITICO real (ver "TEXT
-QA" abajo para la clasificacion CRITICAL/UNCERTAIN). Tras el segundo intento, el sistema
-**acepta el mejor resultado disponible** (queda `FAILED_FINAL`/`TEXT_QA_FAILED` si sigue
-sin pasar QA) **y continua** — nunca hay un tercer intento automatico, nunca se vuelve a
+**Presupuesto UNICO de regeneraciones**: `MAX_RETRIES` (por defecto **2**, techo duro
+`gemini_config.MAX_REGENERATIONS = 2`) aplica por igual a fallos de generacion (error de
+la API o tiempo maximo agotado), rechazos de QA estructural Y rechazos de Text QA — un
+solo contador compartido, nunca dos presupuestos apilables. Esto significa, para
+CUALQUIER slide: **1 intento inicial + como maximo 2 regeneraciones = 3 intentos
+totales**, cada regeneracion solo por un motivo CRITICO real (ver "TEXT QA" abajo para la
+clasificacion CRITICAL/UNCERTAIN). Tras el tercer intento, el sistema **conserva la
+ultima imagen generada** (queda `FAILED_FINAL`/`TEXT_QA_FAILED` si sigue sin pasar QA),
+**lo registra y continua** — nunca hay un cuarto intento automatico, nunca se vuelve a
 intentar porque "podria verse mejor", nunca se regenera por una diferencia puramente
-esteticas/subjetiva. El sistema reporta claramente: slide, error, numero de intentos y
-costo estimado acumulado.
+estetica/subjetiva, y nunca se pregunta al usuario. El sistema reporta claramente: slide,
+error, numero de intentos y costo estimado acumulado (peor caso: 30 imagenes ≈ $1.01).
 - QA (`qa.py`) valida automaticamente: el archivo existe, es una imagen valida (PIL puede
   abrirla), tiene dimensiones razonables y respeta la relacion de aspecto configurada
   (`IMAGE_ASPECT_RATIO`, con tolerancia del 3%). El QA NUNCA regenera por su cuenta —
-  solo marca `REJECTED` y deja que el orquestador decida el retry, respetando
-  `MAX_RETRIES`. Estos criterios (archivo corrupto, proporcion incorrecta) son siempre
+  solo marca `REJECTED` y deja que el orquestador decida la regeneracion, respetando
+  el maximo de 2. Estos criterios (archivo corrupto, proporcion incorrecta) son siempre
   CRITICOS por definicion — nunca generan un rechazo "dudoso".
 - Limitacion conocida (ver "Limitaciones" mas abajo): el QA automatico NO evalua
   coherencia visual real con el Slide 1 ni si el mockup de producto se reprodujo
@@ -2543,7 +2724,7 @@ ECONOMY_MODE=true
 GEMINI_BATCH_ENABLED=false                # FABRICA RAPIDA: modo normal SIEMPRE direct; true
                                            # NUNCA activa Batch por si solo (ver --force-batch)
 MAX_SLIDES=10                            # nunca configurable por encima del limite duro
-MAX_RETRIES=1                            # 1 intento + 1 regeneracion maximo (solo por CRITICO)
+MAX_RETRIES=2                            # 1 intento + 2 regeneraciones maximo (solo por CRITICO); techo duro 2
 GEMINI_IMAGE_PRICE_PER_IMAGE=            # vacio hasta confirmar el precio oficial
 
 KIE_AI_API_KEY=                          # legacy
@@ -2612,7 +2793,7 @@ SOURCE_TEXT
        +-- ERROR -> TEXT_QA_REJECTED
              -> regenerar SOLO ese slide (nunca el Batch completo, nunca los demas)
              -> Text QA de nuevo
-             -> TEXT_QA_APPROVED  o  (tras MAX_TEXT_QA_RETRIES)  TEXT_QA_FAILED
+             -> TEXT_QA_APPROVED  o  (tras 2 regeneraciones)  TEXT_QA_FAILED (se conserva la ultima imagen y se continua)
   -> QA FINAL (seccion "24" — cobertura, MAX_SLIDES, producto, CTA, URL, mockup, export)
   -> exportacion
 ```
@@ -2669,25 +2850,40 @@ el slide más denso y el más vacío) o 3+ slides HIGH consecutivos. Prioridad s
 
 ### Severidad: CRITICAL / UNCERTAIN / SKIPPED (regla obligatoria — "OCR dudoso NUNCA bloquea")
 
-Cada `TextQAResult` tiene un campo `severity`: `PASS` (aprobado), `CRITICAL` (rechazo
-real, dispara la unica regeneracion permitida), `UNCERTAIN` (posible falso positivo del
-propio OCR — **aprueba igual, nunca bloquea**), o `SKIPPED` (OCR no disponible).
+Cada `TextQAResult` tiene un campo `severity`: `PASS` (aprobado), `CRITICAL` (error
+real, dispara una regeneracion — maximo 2 por slide), `UNCERTAIN` (ruido de lectura del
+propio OCR — **aprueba igual, nunca bloquea, queda registrado**), o `SKIPPED` (OCR no
+disponible).
 
-Un hallazgo (`DUPLICATED_TOKEN`/`MISSING_TOKEN`/`EXTRA_TOKEN`/`TEXT_CORRUPTION`) nace
-como `CRITICAL`. Antes de rechazar el slide, `_apply_ocr_confidence_downgrade()` mide la
-**confianza promedio real del OCR** sobre esa imagen (`extract_ocr_confidence()`, via
-`pytesseract.image_to_data`, escala 0-100 nativa de Tesseract). Si esa confianza esta por
-debajo de `_OCR_UNCERTAIN_CONFIDENCE_THRESHOLD` (70), el hallazgo se reclasifica
-`UNCERTAIN` y **se aprueba igual** — no podemos distinguir con seguridad "el render esta
-mal" de "el OCR leyo mal un render correcto", y la duda nunca detiene la fabrica. Si la
-confianza es alta (o no se pudo medir), el hallazgo se mantiene `CRITICAL` y SI bloquea
-— corresponde a un error de contenido real (texto omitido/inventado/cambiado/duplicado),
-no a una duda de lectura.
+**Regla vigente desde 2026-09-26** (corrige falsos negativos Y falsos positivos reales de
+la prueba "prueba-config-fija", verificados visualmente sobre 13 imagenes que ahora son
+tests de regresion en `scripts/test_regen_rule.py`):
 
-Esto es distinto de "Tesseract no instalado" (`OCR_UNAVAILABLE`/`skipped=True`, ver
-arriba): ahi no hay NINGUNA medicion posible y el Text QA se omite por completo. Aqui SI
-hubo una lectura, pero de baja confianza — la fabrica prefiere avanzar antes que gastar
-una regeneracion en una duda que quizas ni siquiera es real.
+- **CRITICAL = evidencia estructural**: palabras faltantes (`MISSING_TOKEN`, tambien
+  cuando un bloque se lee con MENOS palabras y no es una simple fusion — ej. "niña no
+  podías" -> "niña pdas"), palabras duplicadas (`DUPLICATED_TOKEN`, tambien cuando el OCR
+  deforma la copia — ej. "años años", "puedes puedes reconocer"), y texto añadido
+  (`EXTRA_TOKEN`/`UNAUTHORIZED_TEXT_ELEMENT`, salvo contenido autorizado o texto de la
+  portada del mockup).
+- **La baja confianza del OCR YA NO rebaja un error estructural a UNCERTAIN**
+  (`_apply_ocr_confidence_downgrade` ya no se usa en el pipeline): con esa regla se
+  aprobo un slide al que le faltaban 35 palabras.
+- **Lectura OCR alternativa antes de declarar CRITICAL** (`extract_text_variants`):
+  imagen ampliada x2 y binarizada (texto claro y texto oscuro). Un error que esta en los
+  pixeles aparece en cualquier lectura; un fallo del OCR cambia entre lecturas. Si
+  alguna lectura sale sin errores estructurales, la imagen se APRUEBA (UNCERTAIN) —
+  asi se evita el falso positivo del slide 10 correcto en cursiva, donde la lectura
+  normal "perdia" la palabra "hubo".
+- **UNCERTAIN = ruido de letras palabra por palabra** (acentos, ñ leida como "fi"/"ii",
+  una letra confundida, palabras pegadas, `TEXT_CORRUPTION` sin perdida ni duplicacion
+  de palabras): aprobado, nunca regenera, queda en el log/manifest.
+- En slides con mockup, que el OCR no lea el titulo del producto en la portada no es
+  CRITICAL (texto pequeño dentro de la foto); que aparezca duplicado si lo es.
+
+Limite honesto: una deformacion de UNA sola letra dentro de una palabra (ej.
+"reconicer") es indistinguible de un error de lectura del OCR y queda UNCERTAIN; en la
+practica estos errores de Gemini vienen acompañados de perdidas/duplicaciones que si se
+detectan.
 
 **Resumen operativo por severidad (compuerta tecnica en `save_image_and_qa`,
 `generate-carousel-gemini.py`)**:
@@ -2695,12 +2891,13 @@ una regeneracion en una duda que quizas ni siquiera es real.
 | Severidad  | ¿Regenera? | ¿Se registra? |
 |------------|------------|----------------|
 | `PASS`     | No, continua | — |
-| `CRITICAL` | Si, maximo 1 vez (`MAX_RETRIES`) | log de rechazo por slide |
+| `CRITICAL` | Si, maximo 2 veces (`MAX_REGENERATIONS`) | log de rechazo por slide; si persiste: "SLIDES CON ADVERTENCIA" |
 | `UNCERTAIN`| **Nunca** | `[WARN]` explicito por slide ("OCR dudoso, NO se regenera") |
 | `SKIPPED`  | No, continua | `[WARN]` explicito ("Text QA omitido") |
 
-Nunca existe una tercera generacion: el presupuesto es siempre 1 intento inicial + 1
-regeneracion como maximo, sin importar cuantos slides fallen en la misma tanda.
+Nunca existe una cuarta generacion: el presupuesto es siempre 1 intento inicial + 2
+regeneraciones como maximo, sin importar cuantos slides fallen en la misma tanda; tras
+eso se conserva la ultima imagen, se registra y el carrusel termina.
 
 ### Tolerancia a confusion tipica de OCR con acentos/ene-con-tilde (regla obligatoria,
 hallazgo real de produccion 2026-09-18, retest "abuela-materna")
@@ -2769,11 +2966,12 @@ ese slide** (nunca el resto del carrusel, nunca los slides ya aprobados), conser
 `exact_text`, `scene_description`, Visual DNA, composición, referencia/ancla, producto y
 mockup sin cambios — solo se vuelve a pedir la generación de la imagen.
 
-`MAX_RETRIES` (por defecto **1**) es el ÚNICO presupuesto de reintentos del sistema —
-compartido con los fallos de generación/QA estructural (ver "COST OPTIMIZATION" ›
-"Retries y QA"), nunca un presupuesto separado para Text QA. Tras agotar ese presupuesto
-(1 intento inicial + 1 regeneración), el slide queda `TEXT_QA_FAILED` — el sistema
-**acepta el mejor resultado disponible y continúa**, nunca sigue regenerando
+`MAX_RETRIES` (por defecto **2**, techo duro `MAX_REGENERATIONS=2`) es el ÚNICO
+presupuesto de regeneraciones del sistema — compartido con los fallos de generación/QA
+estructural (ver "COST OPTIMIZATION" › "Retries y QA"), nunca un presupuesto separado para
+Text QA. Tras agotar ese presupuesto (1 intento inicial + 2 regeneraciones), el slide
+queda `TEXT_QA_FAILED` — el sistema **conserva la ultima imagen, lo registra en "SLIDES CON
+ADVERTENCIA" y continúa**, sin preguntar, nunca sigue regenerando
 indefinidamente ni inicia una "nueva auditoría" después de esa corrección. Ese estado
 NUNCA se reutiliza silenciosamente en un rerun futuro (queda en `_NON_REUSABLE_STATUSES`
 de `cache_manager.py`).
@@ -2912,11 +3110,12 @@ ya estan aprobados.
 el carrusel completo por un fallo parcial del batch.
 
 **"Slide N queda TEXT_QA_FAILED" / palabras duplicadas o deformadas en la imagen**
--> Text QA detecto que el texto renderizado no coincide con `exact_text` y ya agoto
-`MAX_TEXT_QA_RETRIES`. Usar `--regenerate-slides "N"` para reintentar SOLO ese slide
-(el prompt/exact_text no cambian solos; si el problema persiste tras varios intentos,
-puede ser un patron dificil para el modelo con ese texto especifico — considerar
-acortar o reformular la composicion, nunca el contenido de `exact_text`).
+-> Text QA detecto que el texto renderizado no coincide con `exact_text` y ya agoto las
+2 regeneraciones automaticas. El carrusel termino igual (se entrego la ultima version y
+el slide figura en "SLIDES CON ADVERTENCIA"). Durante la ejecucion NUNCA se pregunta por
+esto. SOLO si el usuario lo pide despues, `--regenerate-slides "N"` reintenta ese slide
+(mismo prompt/exact_text; si persiste, puede ser un patron dificil para el modelo con ese
+texto — considerar acortar o reformular la composicion, nunca el contenido de `exact_text`).
 
 **"Text QA omitido" / manifest.json muestra `"text_qa": {"status": "SKIPPED"}`**
 -> `pytesseract` o el binario de Tesseract-OCR no estan instalados/disponibles (o

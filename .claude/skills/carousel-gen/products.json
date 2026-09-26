@@ -6,10 +6,12 @@
       "notes": "Enlace de compra proporcionado directamente por el usuario. El subdominio \"sanandoconmama\" identifica la pagina de este producto; el dominio raiz \"constelacionesfamiliaresoficial.com\" es la plataforma que la aloja, no el nombre del producto. Corregido tras asociacion erronea inicial con \"Constelaciones Familiares\" (nunca existio tal producto en este contexto)."
     },
     "EL DOLOR QUE NO TE PERTENECE": {
-      "purchase_url": "https://eldolorquenotepertenece.com?utm_source=facebook&utm_medium=organic&utm_campaign=constelaciones_familiares&utm_content=DP-CF126",
+      "purchase_url": "https://eldolorquenotepertenece.com?utm_source=facebook&utm_medium=organic&utm_campaign=constelaciones_familiares&utm_content=DP-CF001",
+      "mockup_path": "C:\\Users\\USUARIO\\Downloads\\01 - Infoproductos\\El Dolor que no te Pertenece\\foto editada portada ebook el dolor que no te pertenece.png",
+      "mockup_sha256": "0f8853cb18f08e4022805262eaa4685677e3725faec0bb13df5dce6eb947ab3c",
       "added_at": "2026-09-16T14:37:00",
-      "updated_at": "2026-09-17",
-      "notes": "Enlace de compra proporcionado directamente por el usuario. Ebook de Diana Barreto. Mockup oficial confirmado por el usuario: 'foto editada portada ebook el dolor que no te pertenece.png' (con firma de autora), reutilizado como carousel/assets/book-mockup-original.png en cada bundle nuevo, nunca regenerado. purchase_url actualizado el 2026-09-17 con nuevo utm_content=DP-CF126 (creativo del carrusel 'abuela-materna'), proporcionado directamente por el usuario en el texto fuente del carrusel. Reemplaza utm_content=DP-CF205 del carrusel anterior."
+      "updated_at": "2026-09-26",
+      "notes": "Enlace de compra proporcionado directamente por el usuario. Ebook de Diana Barreto. Mockup oficial confirmado por el usuario: 'foto editada portada ebook el dolor que no te pertenece.png' (con firma de autora), reutilizado como carousel/assets/book-mockup-original.png en cada bundle nuevo, nunca regenerado. 2026-09-26: CONFIGURACION FIJA — purchase_url fijo con utm_content=DP-CF001 (igual a carousel_common.FIXED_PURCHASE_URL) y mockup leido SOLO de mockup_path verificado con mockup_sha256 (confirmado por el usuario); ya no se busca en bundles anteriores (dos bundles del 2026-09-21 habian heredado por error un mockup distinto, sha256 fd06b10f...)."
     }
   }
 }

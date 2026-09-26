@@ -40,10 +40,28 @@ OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
 # COPIA de los archivos finales listos para publicar.
 DOWNLOADS_EXPORT_DIR = Path.home() / "Downloads" / "Carruseles Carousel-Gen"
 
-# Nombre del archivo UNICO de copy de publicacion (regla permanente, ver SKILL.md seccion
-# "COPY_FINAL.txt"). Reemplaza a los antiguos description.txt/cta.txt/hashtags.txt, que ya
-# no se generan.
+# Copy de publicacion (regla permanente, ver SKILL.md "CONFIGURACION FIJA" y
+# "COPY_FINAL.txt"): vive SOLO en la subcarpeta copy/ del bundle (nunca en la raiz) y se
+# entrega como COPY_FINAL.txt (unificado) + DESCRIPCION.txt + CTA.txt + HASHTAGS.txt.
+COPY_DIRNAME = "copy"
 COPY_FINAL_FILENAME = "COPY_FINAL.txt"
+DESCRIPCION_FILENAME = "DESCRIPCION.txt"
+CTA_FILENAME = "CTA.txt"
+HASHTAGS_FILENAME = "HASHTAGS.txt"
+COPY_FILENAMES = (COPY_FINAL_FILENAME, DESCRIPCION_FILENAME, CTA_FILENAME, HASHTAGS_FILENAME)
+
+# CONFIGURACION FIJA Y PERMANENTE (ver SKILL.md "CONFIGURACION FIJA"): el usuario solo
+# aporta imagen de referencia + copy. Formato, cantidad de slides, producto y enlace NO se
+# preguntan — son estos valores, siempre. prepare_carousel.py los impone sobre cualquier
+# valor que traiga claude_decisions.json.
+FIXED_CAROUSEL_TYPE = "carrusel_interactivo"
+FIXED_SLIDE_COUNT = 10
+FIXED_PRODUCT_NAME = "EL DOLOR QUE NO TE PERTENECE"
+FIXED_PURCHASE_URL = (
+    "https://eldolorquenotepertenece.com?utm_source=facebook&utm_medium=organic"
+    "&utm_campaign=constelaciones_familiares&utm_content=DP-CF001"
+)
+FIXED_HASHTAG_COUNT = 8
 
 # Nombre del archivo OBLIGATORIO de resumen de costo/tiempo de cada carrusel REAL (ver
 # SKILL.md "FABRICA RAPIDA" / "COSTO_CARRUSEL.txt"). Se crea automaticamente, sin pedir
@@ -839,12 +857,12 @@ def export_final_slides_to_downloads(
     CUALQUIER generacion (o regeneracion parcial) de CUALQUIER carrusel futuro, sin
     importar el proveedor de generacion, y de nuevo al final de --add-copy.
 
-    Paquete final = todos los `carousel-NN.png` presentes (cualquier cantidad, nunca un
-    numero fijo) + `COPY_FINAL.txt` + `carousel/manifest.json` + `brief.json` +
-    `COSTO_CARRUSEL.txt` — estos archivos sueltos se copian solo si ya existen en el
-    bundle. REGLA PERMANENTE: ya NO se copian `description.txt`, `cta.txt` ni
-    `hashtags.txt` ni se genera `PARA FACEBOOK/` — la carpeta PARA FACEBOOK quedo
-    eliminada del paquete de produccion (PROHIBIDO recrearla aqui).
+    Paquete final (estructura fija, ver SKILL.md "CONFIGURACION FIJA"):
+      [bundle_id]/carousel/carousel-NN.png, [bundle_id]/copy/{COPY_FINAL,DESCRIPCION,CTA,
+      HASHTAGS}.txt, brief.json, COSTO_CARRUSEL.txt y manifest.json — los archivos
+      sueltos se copian solo si ya existen en el bundle. No se genera `PARA FACEBOOK/` —
+      la carpeta PARA FACEBOOK quedo eliminada del paquete de produccion (PROHIBIDO
+      recrearla aqui).
 
     NUNCA copia `carousel-assets-needed.md`, la carpeta `assets/` (referencias/mockups),
     archivos internos de cache/costos (`.generation_cache.json`, `.batch_state.json`,
@@ -870,19 +888,23 @@ def export_final_slides_to_downloads(
         # sintetica y estrictamente creciente por orden narrativo, para que ordenar esta
         # carpeta por Nombre o por Fecha de modificacion de el mismo resultado. El
         # contenido sigue siendo una copia binaria exacta.
+        # Estructura fija del archivo (ver SKILL.md "CONFIGURACION FIJA"): los PNG van en
+        # carousel/ y el copy en copy/, igual que en el bundle.
+        dest_carousel = dest_dir / "carousel"
+        dest_carousel.mkdir(exist_ok=True)
         base_ts = time.time()
         for idx, slide_file in enumerate(slide_files, start=1):
-            dest_slide = dest_dir / slide_file.name
+            dest_slide = dest_carousel / slide_file.name
             shutil.copy(slide_file, dest_slide)
             synthetic_ts = base_ts + idx
             os.utime(dest_slide, (synthetic_ts, synthetic_ts))
 
         # Entregables adicionales del paquete final (lista fija, nunca archivos internos
-        # como assets/ o carousel-assets-needed.md). El copy de publicacion es UNICAMENTE
-        # COPY_FINAL.txt (regla permanente) — description.txt/cta.txt/hashtags.txt ya no
-        # se generan ni se copian.
-        extra_deliverables = (
-            (COPY_FINAL_FILENAME, bundle_path / COPY_FINAL_FILENAME),
+        # como assets/ o carousel-assets-needed.md). El copy de publicacion vive en copy/.
+        copy_dir = bundle_path / COPY_DIRNAME
+        extra_deliverables = tuple(
+            (f"{COPY_DIRNAME}/{name}", copy_dir / name) for name in COPY_FILENAMES
+        ) + (
             (COSTO_CARRUSEL_FILENAME, bundle_path / COSTO_CARRUSEL_FILENAME),
             ("manifest.json", carousel_dir / "manifest.json"),
             ("brief.json", bundle_path / "brief.json"),
@@ -890,10 +912,14 @@ def export_final_slides_to_downloads(
         copied_extra = []
         for extra_name, extra_source in extra_deliverables:
             if extra_source.exists():
+                (dest_dir / extra_name).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(extra_source, dest_dir / extra_name)
                 copied_extra.append(extra_name)
 
-        print(f"   [OK] {len(slide_files)} slides copiados a Descargas: {dest_dir}")
+        print(f"   [OK] {len(slide_files)} slides copiados a Descargas: {dest_carousel}")
+        if len(slide_files) != FIXED_SLIDE_COUNT:
+            print(f"   [WARN] El paquete tiene {len(slide_files)} slides; la configuracion fija "
+                  f"exige exactamente {FIXED_SLIDE_COUNT}.")
         if copied_extra:
             print(f"   [OK] Entregables adicionales copiados: {', '.join(copied_extra)}")
         missing_extra = [n for n, p in extra_deliverables if n not in copied_extra]
@@ -961,22 +987,28 @@ def save_copy_deliverables(
     carousel-NN.png ni brief.json, y NUNCA inventa `product`/`purchase_url` — si no hay
     producto asociado en el brief, se pasan como None y quedan null.
 
-    REGLA PERMANENTE (ver SKILL.md): el copy de publicacion existe UNICAMENTE como
-    `COPY_FINAL.txt` en la raiz del bundle. Ya NO se generan `description.txt`,
-    `cta.txt` ni `hashtags.txt` como archivos independientes — esos tres archivos
-    quedaron eliminados de la generacion futura (no se crean ni se sobrescriben aqui).
-
-    Escribe en la raiz del bundle:
-      - COPY_FINAL.txt (DESCRIPCIÓN + CTA + ENLACE DE COMPRA + HASHTAGS, unificado)
+    REGLA PERMANENTE (ver SKILL.md "CONFIGURACION FIJA"): el copy vive UNICAMENTE en la
+    subcarpeta copy/ del bundle (nunca COPY_FINAL.txt en la raiz). Escribe:
+      - copy/COPY_FINAL.txt (DESCRIPCIÓN + CTA + ENLACE DE COMPRA + HASHTAGS, unificado)
+      - copy/DESCRIPCION.txt (descripcion)
+      - copy/CTA.txt (CTA; se le agrega purchase_url al final si el CTA no lo incluye ya)
+      - copy/HASHTAGS.txt (hashtags en una linea, separados por espacio)
     Y fusiona (sin pisar el resto del manifest) estos campos en carousel/manifest.json:
       "description", "cta", "hashtags", "product", "purchase_url" (metadatos
       estructurados internos, se mantienen por utilidad) y "copy_final_file" (registra
-      que el archivo fisico de publicacion es COPY_FINAL.txt).
+      que el archivo fisico de publicacion es copy/COPY_FINAL.txt).
     """
-    bundle_path.mkdir(parents=True, exist_ok=True)
+    copy_dir = bundle_path / COPY_DIRNAME
+    copy_dir.mkdir(parents=True, exist_ok=True)
 
     copy_final_text = build_copy_final_text(description, cta, purchase_url, hashtags)
-    (bundle_path / COPY_FINAL_FILENAME).write_text(copy_final_text, encoding="utf-8")
+    (copy_dir / COPY_FINAL_FILENAME).write_text(copy_final_text, encoding="utf-8")
+    (copy_dir / DESCRIPCION_FILENAME).write_text(description.strip() + "\n", encoding="utf-8")
+    cta_text = cta.strip()
+    if purchase_url and purchase_url.strip() not in cta_text:
+        cta_text = f"{cta_text}\n\n{purchase_url.strip()}"
+    (copy_dir / CTA_FILENAME).write_text(cta_text + "\n", encoding="utf-8")
+    (copy_dir / HASHTAGS_FILENAME).write_text(" ".join(hashtags) + "\n", encoding="utf-8")
 
     carousel_dir = bundle_path / "carousel"
     carousel_dir.mkdir(exist_ok=True)
@@ -993,12 +1025,12 @@ def save_copy_deliverables(
     manifest["hashtags"] = hashtags or []
     manifest["product"] = product
     manifest["purchase_url"] = purchase_url
-    manifest["copy_final_file"] = COPY_FINAL_FILENAME
+    manifest["copy_final_file"] = f"{COPY_DIRNAME}/{COPY_FINAL_FILENAME}"
 
     with open(manifest_file, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, ensure_ascii=False)
 
-    print(f"   [OK] {COPY_FINAL_FILENAME} guardado en {bundle_path}")
+    print(f"   [OK] {', '.join(COPY_FILENAMES)} guardados en {copy_dir}")
     print(f"   [OK] manifest.json actualizado con description/cta/hashtags/product/purchase_url/copy_final_file")
 
 
@@ -1190,8 +1222,24 @@ def build_costo_carrusel_text(
         "Cobertura:", pct(coverage_pct), "",
         "Contenido inventado:", "N/D (verificado manualmente en el PASO 6.5 antes de generar — no medible por este script)", "",
         "Bundle final:", final_bundle_path, "",
-        sep,
+        sep, "SLIDES CON ADVERTENCIA (revisar antes de publicar)", sep, "",
     ]
+    # Regla permanente de regeneracion (ver SKILL.md "CONFIGURACIÓN FIJA"): slides que
+    # agotaron las regeneraciones automaticas sin pasar QA. Se entregan igual (ultima
+    # version generada) — este bloque solo los deja registrados, nunca bloquea.
+    pending = (text_qa_block or {}).get("pending_slides") or []
+    if not pending:
+        lines += ["Ninguno.", ""]
+    for item in pending:
+        attempts = item.get("attempts")
+        lines += [
+            f"Slide {item.get('slide')}: {item.get('status')}"
+            + (f" tras {attempts} intento(s)" if attempts else "")
+            + ("" if item.get("png_delivered", True) else " — SIN PNG (Gemini no devolvio imagen)"),
+            f"  Motivo: {item.get('reason') or 'N/D'}",
+            "",
+        ]
+    lines.append(sep)
     return "\n".join(lines) + "\n"
 
 
