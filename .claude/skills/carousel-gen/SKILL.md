@@ -165,10 +165,23 @@ algo, y sugerir comandos como `--regenerate-slides` al final.
    brief.json, COSTO_CARRUSEL.txt, manifest.json, pipeline_result.json), se verifica
    (carpeta, 10 PNG, copy, manifest, pipeline_result) y, si falla, se reintenta una vez y
    se registra el error (`windows_export.status = FALLIDA`). Fuera de Windows (cloud o
-   remoto) el bundle queda en `outputs/bundles/` y se registra
-   `NO_DISPONIBLE_FUERA_DE_WINDOWS`: nunca se afirma que se copio a Windows.
+   remoto) se registra `NO_DISPONIBLE_FUERA_DE_WINDOWS` (nunca se intenta escribir en
+   `C:\Users\...` ni se afirma que se copio a Windows) y se aplica la ENTREGA CLOUD.
+6b. **ENTREGA CLOUD (ZIP unico)**: con el bundle ya cerrado, `cierre_bundle.py` crea
+   automaticamente `outputs/bundles/<bundle_id>.zip` con SOLO los archivos finales dentro
+   de la carpeta `<bundle_id>/` (`carousel/carousel-01.png` … `carousel-10.png`, `copy/`
+   con sus 4 archivos, `brief.json`, `COSTO_CARRUSEL.txt`, `manifest.json`,
+   `pipeline_result.json`); nunca originales, `.previo`, staging, scratchpad, temporales,
+   logs ni tests. Lo verifica (se abre, CRC correcto, lista exacta con 10 PNG, bytes
+   identicos al bundle) y registra `cloud_export` (`zip_created`, `zip_path`,
+   `zip_verified`) en `manifest.json` y `pipeline_result.json`. En cloud el ultimo
+   mensaje entrega ESE ZIP como UNICO archivo descargable: nunca los 10 PNG sueltos como
+   mecanismo principal y nunca se pide copiar archivos a mano. Si el ZIP falla
+   (`zip_verified: false`), se informa el error y NO se dice que la descarga esta lista.
+   Re-crear el ZIP de un bundle cerrado: `python scripts/cierre_bundle.py --zip <bundle_id>`.
 7. **Ultimo mensaje**: el bloque de copy de 10.6 y el INFORME FINAL que imprime
-   `run_carousel_pipeline.py`, copiado tal cual y terminado en `FIN`. Nada despues.
+   `run_carousel_pipeline.py`, copiado tal cual y terminado en `FIN`. Nada despues. En
+   cloud, junto al informe va el ZIP de 6b como unico archivo descargable.
 
 **Salida obligatoria de cada ejecucion** (bundle en `outputs/bundles/<bundle_id>/` y
 copia archivada automaticamente en la carpeta local ya configurada

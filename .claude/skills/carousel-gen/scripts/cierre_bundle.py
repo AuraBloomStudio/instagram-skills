@@ -23,15 +23,23 @@ El proceso NO termina cuando Gemini termina. Despues de run_generation(), en est
      %USERPROFILE%\\Downloads\\Carruseles Carousel-Gen\\<bundle_id>\\, se verifica y, si
      falla, se reintenta una vez. Fuera de Windows se registra que la exportacion no
      puede ejecutarse desde ese entorno (nunca se finge).
+  6. ENTREGA CLOUD (fuera de Windows): con el bundle ya cerrado se crea UN UNICO ZIP
+     outputs/bundles/<bundle_id>.zip con solo los archivos finales (10 PNG, copy/,
+     brief.json, COSTO_CARRUSEL.txt, manifest.json, pipeline_result.json) dentro de la
+     carpeta <bundle_id>/, se verifica (abre, CRC, lista exacta, bytes identicos) y se
+     registra zip_created/zip_path/zip_verified en manifest.json y pipeline_result.json.
+     Si falla, se registra el error y el ZIP no se presenta como descarga.
 
 Nunca pregunta nada, nunca llama a Gemini y nunca lanza excepciones hacia arriba: todo
 problema queda registrado en manifest.json y pipeline_result.json.
 """
 
+import hashlib
 import json
 import os
 import shutil
 import sys
+import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -392,6 +400,103 @@ def export_to_windows(bundle_path: Path, bundle_id: str) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# 6. Entrega cloud: un unico ZIP verificado del bundle final
+# ---------------------------------------------------------------------------
+
+def zip_path_for(bundle_path: Path, bundle_id: str) -> Path:
+    return bundle_path.parent / f"{bundle_id}.zip"
+
+
+def zip_members(bundle_path: Path) -> List[str]:
+    """Rutas (relativas al bundle) de los archivos finales que van en el ZIP. Nada mas."""
+    members = [f"carousel/carousel-{n:02d}.png" for n in range(1, FIXED_SLIDE_COUNT + 1)]
+    members += [f"{COPY_DIRNAME}/{name}" for name in COPY_FILENAMES]
+    members += list(ROOT_FILES)
+    return members
+
+
+def _sha(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def verify_bundle_zip(zip_file: Path, bundle_path: Path, bundle_id: str) -> List[str]:
+    """Devuelve la lista de problemas (vacia = ZIP correcto y con los archivos finales)."""
+    problems: List[str] = []
+    expected = {f"{bundle_id}/{m}": bundle_path / m for m in zip_members(bundle_path)}
+    try:
+        with zipfile.ZipFile(zip_file) as zf:
+            bad = zf.testzip()
+            if bad:
+                problems.append(f"CRC incorrecto en {bad}")
+            names = set(zf.namelist())
+            if names != set(expected):
+                missing = sorted(set(expected) - names)
+                extra = sorted(names - set(expected))
+                problems.append(f"contenido distinto: faltan {missing} sobran {extra}")
+            pngs = [n for n in names if n.startswith(f"{bundle_id}/carousel/") and n.endswith(".png")]
+            if len(pngs) != FIXED_SLIDE_COUNT:
+                problems.append(f"{len(pngs)} PNG en el ZIP (se esperaban {FIXED_SLIDE_COUNT})")
+            for name, src in expected.items():
+                if name in names and hashlib.sha256(zf.read(name)).hexdigest() != _sha(src):
+                    problems.append(f"{name} no coincide con el archivo final del bundle")
+    except (OSError, zipfile.BadZipFile) as exc:
+        problems.append(f"el ZIP no se puede abrir: {type(exc).__name__}: {exc}")
+    return problems
+
+
+def _record_zip(bundle_path: Path, result_path: Path, result: Dict[str, Any], info: Dict[str, Any]) -> None:
+    """Registra la entrega en manifest.json (carousel/ y raiz) y en pipeline_result.json."""
+    manifest_path = bundle_path / "carousel" / "manifest.json"
+    manifest = _read_json(manifest_path)
+    if manifest is not None:
+        manifest["cloud_export"] = info
+        _write_json(manifest_path, manifest)
+        shutil.copy2(manifest_path, bundle_path / "manifest.json")
+    result["cloud_export"] = info
+    _write_json(result_path, result)
+
+
+def create_bundle_zip(bundle_path: Path, bundle_id: str, result_path: Optional[Path] = None,
+                      result: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    Crea y verifica outputs/bundles/<bundle_id>.zip. El registro (zip_created, zip_path,
+    zip_verified) se escribe ANTES de comprimir, para que el manifest.json y el
+    pipeline_result.json del ZIP sean los finales; si la verificacion falla se reescribe
+    con el error y el ZIP se elimina (nunca se presenta como descarga lista).
+    """
+    result_path = result_path or bundle_path / "pipeline_result.json"
+    result = result if result is not None else (_read_json(result_path) or {})
+    zip_file = zip_path_for(bundle_path, bundle_id)
+    ok_info = {"zip_created": True, "zip_path": str(zip_file), "zip_verified": True,
+               "files": len(zip_members(bundle_path)), "created_at": _now()}
+    missing = [m for m in zip_members(bundle_path) if not (bundle_path / m).is_file()]
+    if missing:
+        info = {"zip_created": False, "zip_path": str(zip_file), "zip_verified": False,
+                "errors": [f"faltan archivos finales en el bundle: {missing}"]}
+        _record_zip(bundle_path, result_path, result, info)
+        return info
+    _record_zip(bundle_path, result_path, result, ok_info)
+    tmp = zip_file.with_name(zip_file.name + ".tmp")
+    errors: List[str] = []
+    try:
+        with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for member in zip_members(bundle_path):
+                zf.write(bundle_path / member, f"{bundle_id}/{member}")
+        os.replace(tmp, zip_file)
+        errors = verify_bundle_zip(zip_file, bundle_path, bundle_id)
+    except Exception as exc:  # noqa: BLE001
+        errors.append(f"{type(exc).__name__}: {exc}")
+    finally:
+        tmp.unlink(missing_ok=True)
+    if not errors:
+        return ok_info
+    zip_file.unlink(missing_ok=True)
+    info = {"zip_created": False, "zip_path": str(zip_file), "zip_verified": False, "errors": errors}
+    _record_zip(bundle_path, result_path, result, info)
+    return info
+
+
+# ---------------------------------------------------------------------------
 # Orquestacion
 # ---------------------------------------------------------------------------
 
@@ -454,6 +559,9 @@ def close_bundle(bundle_path: Path, bundle_id: str, build_result: Callable[[], D
     if export.get("status") == "OK":
         # La copia en Downloads debe tener el pipeline_result final (con la exportacion).
         shutil.copy2(result_path, Path(export["path"]) / "pipeline_result.json")
+    elif export.get("status") == "NO_DISPONIBLE_FUERA_DE_WINDOWS":
+        # Cloud: la entrega es UN UNICO ZIP del bundle ya cerrado (nunca C:\Users\...).
+        create_bundle_zip(bundle_path, bundle_id, result_path, result)
     return result
 
 
@@ -490,7 +598,24 @@ def format_report(bundle_id: str, bundle_path: Path, result: Dict[str, Any]) -> 
         lines.append(f"Downloads: {export['path']} (verificado, intento {export.get('attempts')})")
     elif export.get("status") == "FALLIDA":
         lines.append(f"Downloads: EXPORTACION FALLIDA -> {export.get('errors')}")
+    elif result.get("cloud_export"):
+        cloud = result["cloud_export"]
+        if cloud.get("zip_verified"):
+            lines.append(f"Descarga: {cloud['zip_path']} (ZIP unico, verificado)")
+        else:
+            lines.append(f"Descarga: ZIP NO DISPONIBLE (error) -> {cloud.get('errors')}")
     else:
         lines.append(f"Downloads: {export.get('detail', 'N/D')}")
     lines.append("FIN")
     return "\n".join(lines)
+
+
+if __name__ == "__main__":
+    # Crea y verifica el ZIP de un bundle ya cerrado: python cierre_bundle.py --zip <bundle_id>
+    from carousel_common import OUTPUTS_DIR
+    if len(sys.argv) != 3 or sys.argv[1] != "--zip":
+        print("Uso: python cierre_bundle.py --zip <bundle_id>")
+        sys.exit(2)
+    info = create_bundle_zip(OUTPUTS_DIR / sys.argv[2], sys.argv[2])
+    print(json.dumps(info, ensure_ascii=False, indent=2))
+    sys.exit(0 if info.get("zip_verified") else 1)

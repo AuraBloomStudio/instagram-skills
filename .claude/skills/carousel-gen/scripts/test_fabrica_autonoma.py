@@ -28,6 +28,15 @@ test_fabrica_autonoma.py - carousel-gen como fabrica autonoma (2026-09-26).
   TEST 11 — Si el respaldo no basta: regeneracion automatica solo dentro del presupuesto
             (MAX_REGENERATIONS), los demas slides quedan intactos y el cierre NUNCA es
             COMPLETO con un slide que sigue mal.
+  TEST 12 — Entrega cloud: fuera de Windows, tras cerrar el bundle, se crea UN UNICO ZIP
+            outputs/bundles/<id>.zip con exactamente los archivos finales (10 PNG, copy/,
+            brief, COSTO, manifest, pipeline_result) dentro de <id>/, sin originales,
+            .previo, staging ni temporales; se verifica y se registra en manifest.json y
+            pipeline_result.json; nunca se escribe en Downloads.
+  TEST 13 — ZIP fallido = error real: zip_verified False, ZIP eliminado, error registrado,
+            el informe NO dice que la descarga esta lista.
+  TEST 14 — Windows local conserva su comportamiento: copia verificada a Downloads y
+            ningun ZIP.
 
 Sin llamadas a Gemini ($0). Downloads se redirige a una carpeta temporal.
 """
@@ -425,6 +434,103 @@ def test_11_regeneracion_dentro_del_presupuesto_y_nunca_completo():
         shutil.rmtree(profile, ignore_errors=True)
 
 
+def _cloud_close(bundle_id: str, profile: Path) -> Dict:
+    bundle = OUTPUTS_DIR / bundle_id
+    with patch.dict(os.environ, {"USERPROFILE": str(profile)}), patch.object(sys, "platform", "linux"):
+        return cierre_bundle.close_bundle(bundle, bundle_id, lambda: {"warnings": []}, strict_review_enabled=False)
+
+
+def test_12_zip_cloud():
+    import zipfile
+    bundle_id = "__test-fabrica-zip__"
+    bundle = OUTPUTS_DIR / bundle_id
+    zip_file = OUTPUTS_DIR / f"{bundle_id}.zip"
+    profile = Path(tempfile.mkdtemp(prefix="fab_t12_profile_"))
+    try:
+        _fake_bundle(bundle_id, profile)
+        shutil.rmtree(profile / "Downloads", ignore_errors=True)  # lo que dejo el pipeline local
+        (bundle / "carousel" / "assets" / "fallback-originals").mkdir(parents=True, exist_ok=True)
+        (bundle / "carousel" / "assets" / "fallback-originals" / "carousel-03.gemini.png").write_bytes(_tiny_png())
+        (bundle / "carousel" / "carousel-03.png.previo").write_bytes(b"previo")
+        (bundle / "staging").mkdir(exist_ok=True)
+        (bundle / "staging" / "tmp.txt").write_text("x", encoding="utf-8")
+        result = _cloud_close(bundle_id, profile)
+        expected = {f"{bundle_id}/{m}" for m in cierre_bundle.zip_members(bundle)}
+        with zipfile.ZipFile(zip_file) as zf:
+            names = set(zf.namelist())
+            crc_ok = zf.testzip() is None
+            zipped_manifest = json.loads(zf.read(f"{bundle_id}/manifest.json"))
+            zipped_result = json.loads(zf.read(f"{bundle_id}/pipeline_result.json"))
+            same = all(zf.read(f"{bundle_id}/{m}") == (bundle / m).read_bytes()
+                       for m in cierre_bundle.zip_members(bundle))
+        pngs = [n for n in names if n.endswith(".png")]
+        manifest = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
+        cloud = result.get("cloud_export", {})
+        report_text = cierre_bundle.format_report(bundle_id, bundle, result)
+        ok = (names == expected and len(pngs) == 10 and len(names) == 18 and crc_ok and same
+              and cloud.get("zip_created") and cloud.get("zip_verified") and cloud.get("zip_path") == str(zip_file)
+              and manifest.get("cloud_export", {}).get("zip_verified")
+              and zipped_manifest.get("cloud_export", {}).get("zip_verified")
+              and zipped_result.get("cloud_export", {}).get("zip_verified")
+              and result["windows_export"]["status"] == "NO_DISPONIBLE_FUERA_DE_WINDOWS"
+              and not (profile / "Downloads").exists()
+              and f"Descarga: {zip_file} (ZIP unico, verificado)" in report_text)
+        report("TEST 12", "Cloud: ZIP unico con exactamente los 18 archivos finales (10 PNG), verificado, "
+                          "registrado en manifest/pipeline_result y sin tocar Downloads", ok,
+               f"archivos={len(names)} png={len(pngs)} crc={crc_ok} identicos={same} cloud={cloud}")
+    finally:
+        shutil.rmtree(bundle, ignore_errors=True)
+        zip_file.unlink(missing_ok=True)
+        shutil.rmtree(profile, ignore_errors=True)
+
+
+def test_13_zip_fallido_es_error_real():
+    bundle_id = "__test-fabrica-zip-fail__"
+    bundle = OUTPUTS_DIR / bundle_id
+    zip_file = OUTPUTS_DIR / f"{bundle_id}.zip"
+    profile = Path(tempfile.mkdtemp(prefix="fab_t13_profile_"))
+    try:
+        _fake_bundle(bundle_id, profile)
+        with patch.object(cierre_bundle, "verify_bundle_zip", return_value=["CRC incorrecto (simulado)"]):
+            result = _cloud_close(bundle_id, profile)
+        cloud = result.get("cloud_export", {})
+        manifest = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
+        saved = json.loads((bundle / "pipeline_result.json").read_text(encoding="utf-8"))
+        report_text = cierre_bundle.format_report(bundle_id, bundle, result)
+        ok = (cloud.get("zip_created") is False and cloud.get("zip_verified") is False and cloud.get("errors")
+              and not zip_file.exists()
+              and manifest["cloud_export"]["zip_verified"] is False
+              and saved["cloud_export"]["zip_verified"] is False
+              and "ZIP NO DISPONIBLE" in report_text and "verificado)" not in report_text)
+        report("TEST 13", "ZIP fallido: error real registrado, ZIP eliminado y el informe no dice que la "
+                          "descarga esta lista", ok, f"cloud={cloud}")
+    finally:
+        shutil.rmtree(bundle, ignore_errors=True)
+        zip_file.unlink(missing_ok=True)
+        shutil.rmtree(profile, ignore_errors=True)
+
+
+def test_14_windows_sin_zip():
+    bundle_id = "__test-fabrica-win__"
+    bundle = OUTPUTS_DIR / bundle_id
+    zip_file = OUTPUTS_DIR / f"{bundle_id}.zip"
+    profile = Path(tempfile.mkdtemp(prefix="fab_t14_profile_"))
+    try:
+        _fake_bundle(bundle_id, profile)
+        with patch.dict(os.environ, {"USERPROFILE": str(profile)}), patch.object(sys, "platform", "win32"):
+            result = cierre_bundle.close_bundle(bundle, bundle_id, lambda: {"warnings": []},
+                                                strict_review_enabled=False)
+        dest = profile / "Downloads" / "Carruseles Carousel-Gen" / bundle_id
+        ok = (result["windows_export"]["status"] == "OK" and all(cierre_bundle.check_package(dest).values())
+              and "cloud_export" not in result and not zip_file.exists())
+        report("TEST 14", "Windows local: copia verificada a Downloads como antes y ningun ZIP", ok,
+               f"export={result['windows_export']['status']} zip={zip_file.exists()}")
+    finally:
+        shutil.rmtree(bundle, ignore_errors=True)
+        zip_file.unlink(missing_ok=True)
+        shutil.rmtree(profile, ignore_errors=True)
+
+
 def main():
     print("=" * 70)
     print("FABRICA AUTONOMA carousel-gen — SIN LLAMADAS A GEMINI")
@@ -434,7 +540,8 @@ def main():
                test_7_reintento_y_fallo_honesto, test_8_pipeline_completo,
                test_9_revision_estricta_detecta_errores_reales,
                test_10_correccion_automatica_de_slide_aprobado_con_error,
-               test_11_regeneracion_dentro_del_presupuesto_y_nunca_completo]:
+               test_11_regeneracion_dentro_del_presupuesto_y_nunca_completo,
+               test_12_zip_cloud, test_13_zip_fallido_es_error_real, test_14_windows_sin_zip]:
         fn()
     print("\n" + "=" * 70)
     n_pass = sum(1 for r in results_log if r["status"] == PASS)

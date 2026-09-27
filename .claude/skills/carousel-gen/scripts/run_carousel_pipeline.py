@@ -333,7 +333,8 @@ def main() -> None:
     print("\n" + format_report(args.bundle_id, bundle_path, result))
 
     closure_ok = result.get("closure", {}).get("status") in ("COMPLETO", "COMPLETO_CON_ADVERTENCIAS")
-    export_ok = result.get("windows_export", {}).get("status") != "FALLIDA"
+    export_ok = (result.get("windows_export", {}).get("status") != "FALLIDA"
+                 and result.get("cloud_export", {}).get("zip_verified", True))
     sys.exit(0 if closure_ok and export_ok else 1)
 
 
