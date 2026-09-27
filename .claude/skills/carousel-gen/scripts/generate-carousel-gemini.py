@@ -57,13 +57,16 @@ from qa import run_qa  # noqa: E402
 from cost_tracker import CostTracker  # noqa: E402
 from direct_generator import GenerationTask, generate_direct  # noqa: E402
 from batch_manager import generate_batch  # noqa: E402
-from text_qa import run_text_qa, TextQAResult  # noqa: E402
+from text_qa import (  # noqa: E402
+    run_text_qa, TextQAResult, OCR_MAX_CONCURRENCY, REASON_OCR_TIMEOUT,
+    OCR_TIMEOUT_SECONDS, install_ocr_signal_handlers,
+)
 
 # FABRICA RAPIDA / PARALELIZACION (ver SKILL.md): el Text QA (OCR local) de los slides
-# de una misma tanda es independiente slide-a-slide, asi que se ejecuta en paralelo con
-# el mismo tope de workers que la generacion (direct_generator._MAX_WORKERS) — nunca
-# secuencial imagen-por-imagen.
-_QA_MAX_WORKERS = 9
+# de una misma tanda es independiente slide-a-slide, asi que se ejecuta en paralelo.
+# El OCR es CPU: el tope es el mismo que el de procesos Tesseract simultaneos
+# (text_qa.OCR_MAX_CONCURRENCY, 3 en 4 CPU) — nunca 9 como la generacion (que es red).
+_QA_MAX_WORKERS = OCR_MAX_CONCURRENCY
 
 
 def _iso_delta_seconds(start_iso: Optional[str], end_iso: Optional[str]) -> Optional[float]:
@@ -454,6 +457,14 @@ def process_slides(
                 if not text_qa_result.approved:
                     text_qa_summary["text_errors_detected"] = text_qa_summary.get("text_errors_detected", 0) + 1
                     text_qa_summary.setdefault("_rejected_slides", set()).add(slide_number)
+            if text_qa_summary is not None and text_qa_result is not None:
+                # OCR que supero su tiempo maximo: el slide sigue (no se regenera por eso),
+                # pero su texto queda "no verificado" y se avisa en el reporte final.
+                timeouts = text_qa_summary.setdefault("_ocr_timeout_slides", set())
+                if text_qa_result.skipped and text_qa_result.reason == REASON_OCR_TIMEOUT:
+                    timeouts.add(slide_number)
+                else:
+                    timeouts.discard(slide_number)
 
             if not ok:
                 # FABRICA RAPIDA: presupuesto UNICO de reintentos (config.max_retries),
@@ -840,6 +851,17 @@ def run_generation(args) -> int:
             "reason": (record.text_qa_rejection_reason or record.last_error) if record else None,
             "png_delivered": png_delivered,
         })
+    listed = {item["slide"] for item in pending_slides}
+    for num in sorted(text_qa_summary.get("_ocr_timeout_slides", set()) - listed):
+        record = cache.get(num)
+        pending_slides.append({
+            "slide": num,
+            "status": "TEXT_QA_NO_VERIFICADO",
+            "attempts": (record.retry_count + 1) if record else None,
+            "reason": f"OCR supero {OCR_TIMEOUT_SECONDS} s; revisar el texto a mano",
+            "png_delivered": (carousel_dir / f"carousel-{num:02d}.png").exists(),
+        })
+    pending_slides.sort(key=lambda item: item["slide"])
     text_qa_manifest_block["pending_slides"] = pending_slides
 
     print("Generando manifest...")
@@ -994,6 +1016,7 @@ def main() -> None:
                          help="SOLO PRUEBAS con --fake-provider: 'N,M' fallan siempre; 'N:2' falla hasta el intento 2")
 
     args = parser.parse_args()
+    install_ocr_signal_handlers()
 
     if args.add_copy:
         sys.exit(run_add_copy(args))
