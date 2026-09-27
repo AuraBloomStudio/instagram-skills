@@ -2954,10 +2954,33 @@ importar cuan "parecida" sea a algo del texto esperado — la fidelidad de conte
 
 El OCR de los slides de una misma tanda (misma ronda de generacion, ej. los slides 2-10
 tras la Fase B) es completamente independiente slide a slide, asi que
-`generate-carousel-gemini.py` lo ejecuta en PARALELO (mismo tope de workers que la
-generacion de imagenes) — nunca slide-por-slide de forma secuencial. Solo el paso de
-guardar resultados/costo/cache se hace despues, en el hilo principal, para evitar
-escrituras concurrentes sobre el mismo `cost_log.json`/`.generation_cache.json`.
+`generate-carousel-gemini.py` lo ejecuta en PARALELO — nunca slide-por-slide de forma
+secuencial. Solo el paso de guardar resultados/costo/cache se hace despues, en el hilo
+principal, para evitar escrituras concurrentes sobre el mismo
+`cost_log.json`/`.generation_cache.json`.
+
+### Ejecucion del OCR con recursos acotados (regla obligatoria, hallazgo real 2026-09-26)
+
+Hasta 9 Tesseract en paralelo, cada uno con varios hilos de OpenMP, saturaron un
+contenedor de 4 CPU (~43 min de OCR). Toda lectura de Tesseract pasa por
+`text_qa._run_tesseract()`:
+
+- **1 hilo por proceso**: cada Tesseract se lanza con `OMP_THREAD_LIMIT=1`.
+- **Maximo de procesos simultaneos**: `OCR_MAX_CONCURRENCY = max(1, min(3, CPUs - 1))`
+  (3 en 4 CPU), impuesto con un semaforo global que cuenta procesos reales (tambien las
+  lecturas alternativas). Las revisiones de QA en paralelo usan el mismo tope, nunca 9.
+- **Tiempo maximo por ejecucion**: `OCR_TIMEOUT_SECONDS = 60`. Al superarlo, el proceso
+  se mata. En Linux/macOS ademas se envuelve con `timeout` de coreutils, que lo acota
+  incluso si el pipeline muere con SIGKILL.
+- **Limpieza de procesos hijos**: los Tesseract vivos quedan registrados;
+  `kill_active_ocr()` los mata al salir (`atexit`) y ante SIGINT/SIGTERM (manejadores
+  instalados en `main()` de `generate-carousel-gemini.py` y `run_carousel_pipeline.py`).
+- **Un OCR bloqueado nunca detiene el carrusel**: si la lectura normal se agota, el
+  slide queda "texto no verificado" (`OCR_TIMEOUT`, SKIPPED): no se regenera, el
+  carrusel sigue y el slide figura como `TEXT_QA_NO_VERIFICADO` en "SLIDES CON
+  ADVERTENCIA". Si se agota una lectura alternativa, se omite y decide la lectura
+  normal: un error real detectado ahi sigue siendo CRITICAL (nunca se aprueba por un
+  timeout). El limite de 2 regeneraciones por slide no cambia.
 
 ### Regeneración selectiva y presupuesto único de reintentos
 

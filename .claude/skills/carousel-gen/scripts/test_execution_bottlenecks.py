@@ -273,7 +273,11 @@ def test_4_text_qa_de_la_tanda_en_paralelo():
         cost_tracker = CostTracker(tmp, "test-qa-parallel-bundle", n_slides, 0.0336)
         config = _FakeConfig()
 
-        with patch.object(mod, "save_image_and_qa", side_effect=_slow_save_image_and_qa):
+        # El tope de QA simultaneo depende de las CPU (text_qa.OCR_MAX_CONCURRENCY: 3 en 4
+        # CPU, 1 en 2 CPU). Se fija el de un contenedor de 4 CPU para que el test mida
+        # paralelismo real acotado en cualquier maquina.
+        with patch.object(mod, "save_image_and_qa", side_effect=_slow_save_image_and_qa), \
+             patch.object(mod, "_QA_MAX_WORKERS", 3):
             started = time.time()
             final_status = mod.process_slides(
                 slides, {}, "la-gran-noticia", config, client, cache, cost_tracker,
@@ -288,11 +292,13 @@ def test_4_text_qa_de_la_tanda_en_paralelo():
             for j, (b_start, b_end) in enumerate(intervals)
             if i != j
         )
+        peak = max(sum(1 for (s0, e0) in intervals if s0 <= start < e0) for (start, _) in intervals)
         all_approved = all(v in ("APPROVED", "TEXT_QA_APPROVED") for v in final_status.values())
-        ok = elapsed < (serial_would_be * 0.7) and overlap and all_approved
+        ok = elapsed < (serial_would_be * 0.7) and overlap and peak <= 3 and all_approved
         report("TEST 4", "Text QA/OCR de slides independientes de la misma tanda corre en paralelo "
-                          "(nunca slide-por-slide)",
-               ok, f"elapsed={elapsed:.2f}s serial_would_be={serial_would_be:.2f}s overlap={overlap} status={final_status}")
+                          "(nunca slide-por-slide) y con tope (nunca mas de 3 a la vez)",
+               ok, f"elapsed={elapsed:.2f}s serial_would_be={serial_would_be:.2f}s overlap={overlap} "
+                   f"pico={peak} status={final_status}")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

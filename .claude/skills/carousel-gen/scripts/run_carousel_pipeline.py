@@ -38,6 +38,7 @@ from typing import Any, Dict, List, Optional
 sys.path.insert(0, str(Path(__file__).parent))
 
 from carousel_common import OUTPUTS_DIR, DOWNLOADS_EXPORT_DIR  # noqa: E402
+from text_qa import install_ocr_signal_handlers  # noqa: E402
 
 
 def _now_iso() -> str:
@@ -201,6 +202,8 @@ def main() -> None:
     parser.add_argument("--force-direct", action="store_true")
     parser.add_argument("--regenerate-slides", type=str, default=None)
     args = parser.parse_args()
+    # Ante Ctrl+C/SIGTERM, matar los Tesseract hijos antes de salir (ver text_qa.py).
+    install_ocr_signal_handlers()
 
     bundle_path = OUTPUTS_DIR / args.bundle_id
 

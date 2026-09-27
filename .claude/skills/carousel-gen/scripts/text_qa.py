@@ -30,8 +30,16 @@ problema estructural (`_apply_ocr_confidence_downgrade` se conserva solo por
 compatibilidad, el pipeline ya no la usa).
 """
 
+import atexit
 import hashlib
+import os
 import re
+import shutil
+import signal
+import subprocess
+import sys
+import tempfile
+import threading
 import unicodedata
 import difflib
 from dataclasses import dataclass, field
@@ -75,6 +83,135 @@ _TESSERACT_CANDIDATE_PATHS = [
     r"C:\Program Files\Tesseract-OCR\tesseract.exe",
     r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
 ]
+
+# ---------------------------------------------------------------------------
+# EJECUCION DEL OCR CON RECURSOS ACOTADOS (2026-09-26)
+# Hallazgo real: hasta 9 Tesseract en paralelo, cada uno con varios hilos de OpenMP,
+# saturaron un contenedor de 4 CPU (~43 min de OCR). Todas las lecturas pasan ahora
+# por `_run_tesseract`: 1 hilo por proceso (OMP_THREAD_LIMIT=1), como maximo
+# OCR_MAX_CONCURRENCY procesos a la vez, OCR_TIMEOUT_SECONDS por ejecucion, y los
+# procesos vivos se registran para matarlos si el pipeline se detiene.
+# ---------------------------------------------------------------------------
+REASON_OCR_TIMEOUT = "OCR_TIMEOUT"
+OCR_TIMEOUT_SECONDS = 60
+
+
+def _ocr_max_concurrency(cpu_count: Optional[int]) -> int:
+    """Tesseract simultaneos: deja 1 nucleo libre y nunca mas de 3 (4 CPU -> 3)."""
+    return max(1, min(3, (cpu_count or 2) - 1))
+
+
+OCR_MAX_CONCURRENCY = _ocr_max_concurrency(os.cpu_count())
+_OCR_SEMAPHORE = threading.BoundedSemaphore(OCR_MAX_CONCURRENCY)
+_ACTIVE_OCR: set = set()
+_ACTIVE_OCR_LOCK = threading.Lock()
+
+
+class OCRTimeout(Exception):
+    """Una ejecucion de Tesseract supero OCR_TIMEOUT_SECONDS y fue terminada."""
+
+
+def _tesseract_cmd() -> Optional[str]:
+    try:
+        import pytesseract
+    except ImportError:
+        return None
+    cmd = getattr(pytesseract.pytesseract, "tesseract_cmd", None)
+    if cmd and cmd != "tesseract":
+        return cmd
+    for candidate in _TESSERACT_CANDIDATE_PATHS:
+        if Path(candidate).exists():
+            return candidate
+    return shutil.which("tesseract")
+
+
+def _build_tesseract_args(cmd: str, image_file: str, timeout: float) -> List[str]:
+    args = [cmd, image_file, "stdout", "-l", "spa+eng"]
+    # En Linux/macOS, `timeout` de coreutils acota el proceso incluso si el pipeline
+    # muere con SIGKILL (caso en que ningun manejador de Python llega a ejecutarse).
+    if sys.platform != "win32" and shutil.which("timeout"):
+        args = ["timeout", "--kill-after=5", str(int(timeout) + 5)] + args
+    return args
+
+
+def _run_tesseract(image, timeout: float = OCR_TIMEOUT_SECONDS) -> str:
+    """
+    Ejecuta Tesseract sobre una imagen PIL con recursos acotados y devuelve el texto.
+    Lanza OCRTimeout si supera `timeout` (el proceso se mata antes de volver),
+    FileNotFoundError si Tesseract no esta instalado y RuntimeError si falla.
+    """
+    cmd = _tesseract_cmd()
+    if not cmd:
+        raise FileNotFoundError("Tesseract no disponible")
+    with tempfile.TemporaryDirectory(prefix="carousel_ocr_") as tmp:
+        image_file = os.path.join(tmp, "ocr.png")
+        image.save(image_file)
+        env = {**os.environ, "OMP_THREAD_LIMIT": "1"}
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
+        with _OCR_SEMAPHORE:
+            proc = subprocess.Popen(
+                _build_tesseract_args(cmd, image_file, timeout),
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                env=env, creationflags=creationflags,
+            )
+            with _ACTIVE_OCR_LOCK:
+                _ACTIVE_OCR.add(proc)
+            try:
+                out, err = proc.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.communicate()
+                raise OCRTimeout(f"Tesseract supero {timeout:.0f} s y fue terminado")
+            except BaseException:
+                proc.kill()
+                proc.wait()
+                raise
+            finally:
+                with _ACTIVE_OCR_LOCK:
+                    _ACTIVE_OCR.discard(proc)
+    if proc.returncode != 0:
+        raise RuntimeError(f"Tesseract fallo ({proc.returncode}): {err.decode('utf-8', 'replace')[:200]}")
+    return out.decode("utf-8", errors="replace")
+
+
+def kill_active_ocr() -> int:
+    """Mata todos los procesos Tesseract vivos (pipeline detenido). Devuelve cuantos."""
+    with _ACTIVE_OCR_LOCK:
+        procs = list(_ACTIVE_OCR)
+    killed = 0
+    for proc in procs:
+        if proc.poll() is None:
+            try:
+                proc.kill()
+                killed += 1
+            except OSError:
+                pass
+    return killed
+
+
+atexit.register(kill_active_ocr)
+
+
+def install_ocr_signal_handlers() -> None:
+    """Llamar desde main(): ante SIGINT/SIGTERM mata los Tesseract hijos y luego sigue
+    el comportamiento anterior de esa senal (KeyboardInterrupt o salida)."""
+    if threading.current_thread() is not threading.main_thread():
+        return
+    for sig in (signal.SIGINT, getattr(signal, "SIGTERM", None)):
+        if sig is None:
+            continue
+        previous = signal.getsignal(sig)
+
+        def _handler(signum, frame, _previous=previous):
+            kill_active_ocr()
+            if _previous == signal.SIG_IGN:
+                return
+            if callable(_previous):
+                _previous(signum, frame)
+            else:
+                raise SystemExit(128 + signum)
+
+        signal.signal(sig, _handler)
 
 # FABRICA RAPIDA (ver SKILL.md "TEXT QA" y regla "OCR dudoso NUNCA bloquea"): cuando la
 # confianza promedio del OCR sobre la imagen esta por debajo de este umbral (escala
@@ -463,23 +600,20 @@ def extract_text_from_image(image_path: Path) -> Optional[str]:
     OCR 100% LOCAL (Tesseract via pytesseract) — NUNCA llama a ninguna API externa,
     NUNCA gasta credito. Devuelve None si pytesseract o el binario de Tesseract no
     estan disponibles en el entorno (caso que `run_text_qa` maneja explicitamente como
-    OCR_UNAVAILABLE, nunca como un fallo silencioso).
+    OCR_UNAVAILABLE, nunca como un fallo silencioso). Lanza OCRTimeout si Tesseract
+    supera OCR_TIMEOUT_SECONDS (ver `_run_tesseract`).
     """
     try:
-        import pytesseract
+        import pytesseract  # noqa: F401 - solo confirma que el wrapper esta instalado
         from PIL import Image
     except ImportError:
         return None
 
-    if not getattr(pytesseract.pytesseract, "tesseract_cmd", None) or pytesseract.pytesseract.tesseract_cmd == "tesseract":
-        for candidate in _TESSERACT_CANDIDATE_PATHS:
-            if Path(candidate).exists():
-                pytesseract.pytesseract.tesseract_cmd = candidate
-                break
-
     try:
         with Image.open(image_path) as img:
-            return pytesseract.image_to_string(img, lang="spa+eng")
+            return _run_tesseract(img)
+    except OCRTimeout:
+        raise
     except Exception:  # noqa: BLE001 - cualquier fallo de OCR se trata como no disponible, nunca bloquea
         return None
 
@@ -505,8 +639,9 @@ def extract_ocr_confidence(image_path: Path) -> Optional[float]:
                 break
 
     try:
-        with Image.open(image_path) as img:
-            data = pytesseract.image_to_data(img, lang="spa+eng", output_type=pytesseract.Output.DICT)
+        with Image.open(image_path) as img, _OCR_SEMAPHORE:
+            data = pytesseract.image_to_data(img, lang="spa+eng", output_type=pytesseract.Output.DICT,
+                                             timeout=OCR_TIMEOUT_SECONDS)
     except Exception:  # noqa: BLE001 - cualquier fallo de OCR se trata como "sin medicion"
         return None
 
@@ -684,7 +819,16 @@ def run_text_qa(
     downgrada a UNCERTAIN — solo MISSING_TOKEN y DUPLICATED_TOKEN siguen siendo CRITICAL
     en slides con mockup (son errores estructurales del slide, no del cover del producto).
     """
-    rendered = extract_text_from_image(image_path)
+    try:
+        rendered = extract_text_from_image(image_path)
+    except OCRTimeout as exc:
+        # Sin lectura no hay error detectado ni aprobacion real: el slide queda "texto no
+        # verificado" (SKIPPED), no se regenera y el pipeline lo registra como advertencia.
+        return TextQAResult(
+            approved=True, reason=REASON_OCR_TIMEOUT,
+            detail=f"Texto NO verificado: {exc} — no bloqueante, revisar a mano",
+            expected_text_hash=_hash_text(expected_text), rendered_text_hash="", skipped=True,
+        )
     if rendered is None:
         return TextQAResult(
             approved=True, reason=REASON_OCR_UNAVAILABLE,
@@ -790,18 +934,14 @@ def extract_text_variants(image_path: Path):
     descartar un hallazgo de la lectura normal: imagen en escala de grises ampliada x2 y
     binarizada, una vez para texto CLARO sobre fondo oscuro y otra para texto OSCURO
     sobre fondo claro. Genera (nombre, texto); no genera nada si el OCR no esta
-    disponible.
+    disponible. Una lectura que supera OCR_TIMEOUT_SECONDS se omite: la decision queda
+    en la lectura normal (un error real detectado ahi sigue siendo CRITICAL).
     """
     try:
-        import pytesseract
+        import pytesseract  # noqa: F401 - solo confirma que el wrapper esta instalado
         from PIL import Image, ImageOps
     except ImportError:
         return
-    if not getattr(pytesseract.pytesseract, "tesseract_cmd", None) or pytesseract.pytesseract.tesseract_cmd == "tesseract":
-        for candidate in _TESSERACT_CANDIDATE_PATHS:
-            if Path(candidate).exists():
-                pytesseract.pytesseract.tesseract_cmd = candidate
-                break
     try:
         with Image.open(image_path) as img:
             gray = ImageOps.grayscale(img.convert("RGB"))
@@ -814,6 +954,6 @@ def extract_text_variants(image_path: Path):
     )
     for name, variant in variants:
         try:
-            yield name, pytesseract.image_to_string(variant, lang="spa+eng")
-        except Exception:  # noqa: BLE001
+            yield name, _run_tesseract(variant)
+        except Exception:  # noqa: BLE001 - incluye OCRTimeout: esa lectura alternativa se omite
             continue
