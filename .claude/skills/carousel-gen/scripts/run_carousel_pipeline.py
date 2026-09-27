@@ -11,6 +11,8 @@ Uso:
     python3 scripts/run_carousel_pipeline.py <bundle_id> [--copy-json COPY_JSON_PATH]
     python3 scripts/run_carousel_pipeline.py <bundle_id> --copy-json copy.json --fake-provider
     python3 scripts/run_carousel_pipeline.py <bundle_id> --dry-run
+    python3 scripts/run_carousel_pipeline.py <bundle_id> --close-only   (re-cierra un bundle
+        ya generado: revision final estricta + correccion automatica + exportacion)
 
 Salida:
     Stdout normal durante la ejecucion.
@@ -26,6 +28,7 @@ Checkpoints de tiempo T0-T5:
     T5: finalizacion completa (pipeline_result.json escrito)
 """
 
+import os
 import sys
 import json
 import argparse
@@ -39,6 +42,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from carousel_common import OUTPUTS_DIR, DOWNLOADS_EXPORT_DIR  # noqa: E402
 from text_qa import install_ocr_signal_handlers  # noqa: E402
+from cierre_bundle import close_bundle, format_report  # noqa: E402
 
 
 def _now_iso() -> str:
@@ -178,6 +182,30 @@ def _build_result(
     return result
 
 
+def _make_regenerate_fn(mod, base_args: Namespace):
+    """
+    Regeneracion para la revision final estricta: UN solo intento Gemini del slide pedido
+    (MAX_RETRIES=0 durante esa llamada). cierre_bundle.py decide si al slide le queda
+    presupuesto de MAX_REGENERATIONS y restaura los demas slides y el manifest despues.
+    """
+    def regenerate(slide_number: int) -> bool:
+        args = Namespace(**vars(base_args))
+        args.regenerate_slides = str(slide_number)
+        args.copy_json = None
+        previous = os.environ.get("MAX_RETRIES")
+        os.environ["MAX_RETRIES"] = "0"
+        try:
+            return mod.run_generation(args) == 0
+        except SystemExit as exc:
+            return exc.code in (0, None)
+        finally:
+            if previous is None:
+                os.environ.pop("MAX_RETRIES", None)
+            else:
+                os.environ["MAX_RETRIES"] = previous
+    return regenerate
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
@@ -201,6 +229,10 @@ def main() -> None:
     )
     parser.add_argument("--force-direct", action="store_true")
     parser.add_argument("--regenerate-slides", type=str, default=None)
+    parser.add_argument(
+        "--close-only", action="store_true",
+        help="No genera: ejecuta solo el cierre obligatorio sobre un bundle ya generado",
+    )
     args = parser.parse_args()
     # Ante Ctrl+C/SIGTERM, matar los Tesseract hijos antes de salir (ver text_qa.py).
     install_ocr_signal_handlers()
@@ -235,7 +267,26 @@ def main() -> None:
     print(f"[T2] Generacion iniciando (Fase A ancla + Fase B paralela + retries): {t2}")
 
     # Ejecutar pipeline completo: generacion + QA + retries + export + copy + costo
-    rc = mod.run_generation(gen_args)
+    # Ninguna excepcion de la generacion puede saltarse el cierre obligatorio.
+    generation_error = None
+    previous_timing: Dict[str, Optional[str]] = {}
+    try:
+        if args.close_only:
+            previous = json.loads((bundle_path / "pipeline_result.json").read_text(encoding="utf-8"))
+            previous_timing = previous.get("timing") or {}
+            rc = 0
+            print("[CLOSE-ONLY] Sin generacion: solo cierre obligatorio del bundle existente.")
+        else:
+            rc = mod.run_generation(gen_args)
+    except (OSError, ValueError) as exc:
+        rc = 1
+        generation_error = f"--close-only sin pipeline_result.json valido: {exc}"
+    except SystemExit as exc:
+        rc = exc.code if isinstance(exc.code, int) else 1
+    except Exception as exc:  # noqa: BLE001 - se registra y el cierre se ejecuta igual
+        rc = 1
+        generation_error = f"{type(exc).__name__}: {exc}"
+        print(f"[ERROR] La generacion lanzo una excepcion: {generation_error}")
 
     t3 = _now_iso()
     print(f"[T3] Generacion + QA + retries completados: {t3}")
@@ -243,7 +294,7 @@ def main() -> None:
     t5 = _now_iso()
     print(f"[T5] Finalizacion completa: {t5}")
 
-    timing: Dict[str, Optional[str]] = {
+    timing: Dict[str, Optional[str]] = previous_timing or {
         "T0_pipeline_start": t0,
         "T1_module_loaded": t1,
         "T2_generation_start": t2,
@@ -253,20 +304,37 @@ def main() -> None:
     }
 
     # Construir resultado estructurado leyendo los archivos ya escritos por run_generation
-    result = _build_result(bundle_path, args.bundle_id, rc, timing)
+    # CIERRE OBLIGATORIO (ver cierre_bundle.py y SKILL.md "CIERRE OBLIGATORIO"): respaldo
+    # determinista de texto -> manifest -> COSTO -> pipeline_result -> validacion ->
+    # exportacion a Downloads (solo Windows, verificada). Nunca pregunta nada.
+    def _result() -> Dict[str, Any]:
+        res = _build_result(bundle_path, args.bundle_id, rc, timing)
+        if generation_error:
+            res["generation_error"] = generation_error
+        return res
 
-    # Escribir pipeline_result.json en la raiz del bundle
     if bundle_path.exists():
-        result_path = bundle_path / "pipeline_result.json"
-        result_path.write_text(
-            json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
-        print(f"\n[PIPELINE] Resultado estructurado: {result_path}")
+        result = close_bundle(bundle_path, args.bundle_id, _result,
+                              critical_phrases_fn=getattr(mod, "build_critical_phrases", None),
+                              authorized_tokens_fn=getattr(mod, "_build_authorized_extra_tokens", None),
+                              regenerate_fn=None if args.dry_run else _make_regenerate_fn(mod, gen_args),
+                              # Con el proveedor falso las imagenes no tienen texto real.
+                              strict_review_enabled=not (args.fake_provider or args.dry_run))
+    else:
+        result = _result()
+        result["closure"] = {"status": "INCOMPLETO", "errors": [f"no existe el bundle {bundle_path}"]}
+        result["windows_export"] = {"status": "NO_EJECUTADA", "detail": "no hay bundle que exportar"}
+    print(f"\n[PIPELINE] Resultado estructurado: {bundle_path / 'pipeline_result.json'}")
 
     # Emitir RESULT_JSON para que Claude lo capture leyendo la ultima linea de stdout
     print(f"\nRESULT_JSON:{json.dumps(result, ensure_ascii=False)}")
 
-    sys.exit(rc)
+    # Informe final fijo: ultimo bloque de la ejecucion (sin preguntas despues).
+    print("\n" + format_report(args.bundle_id, bundle_path, result))
+
+    closure_ok = result.get("closure", {}).get("status") in ("COMPLETO", "COMPLETO_CON_ADVERTENCIAS")
+    export_ok = result.get("windows_export", {}).get("status") != "FALLIDA"
+    sys.exit(0 if closure_ok and export_ok else 1)
 
 
 if __name__ == "__main__":

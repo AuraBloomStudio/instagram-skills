@@ -5,9 +5,9 @@ test_skill_flow.py - Tests para las 5 reglas de flujo nuevas o corregidas en car
 Cubre:
   TEST 1 — bundle_id disponible ANTES de guardar la referencia (no staging)
   TEST 2 — brief con TODOS los campos obligatorios pasa load_brief() sin error
-  TEST 3 — source_text ausente -> STOP (accion correcta, mensaje correcto)
+  TEST 3 — sin copy ni texto en la imagen -> STOP sin pedir que se pegue nada
   TEST 4 — source_text explicito proporcionado -> USE_TEXT (no STOP)
-  TEST 5 — "usar texto de la imagen" explicito -> EXTRACT_IMAGE (permitido)
+  TEST 5 — copy dentro de la imagen -> EXTRACT_IMAGE automatico (sin autorizacion)
 
 Este archivo NO llama a Gemini, NO genera imágenes, NO crea bundles reales de produccion.
 Opera sobre directorios temporales (tempfile.mkdtemp()) eliminados en bloques `finally`.
@@ -108,31 +108,28 @@ _IMAGE_TEXT_PHRASES = [
 def _evaluate_source_text_situation(
     user_message: str,
     source_text_provided: Optional[str],
+    image_has_legible_text: bool = False,
 ) -> Tuple[str, str]:
     """
-    Simula la decision de PASO 3 de SKILL.md.
+    Simula la decision de PASO 3 de SKILL.md (FABRICA AUTONOMA, 2026-09-26).
 
     Parametros:
-        user_message:        Mensaje completo del usuario (instrucciones, contexto, etc.)
-        source_text_provided: Texto del post viral si el usuario lo pego explicitamente;
-                              None si no lo proporciono.
+        user_message:           Mensaje completo del usuario (instrucciones, contexto, etc.)
+        source_text_provided:   Texto del post si el usuario lo pego; None si no.
+        image_has_legible_text: True si la imagen de referencia contiene el copy legible.
 
     Retorna: (action, detail) donde action es uno de:
-        "USE_TEXT"      — el usuario proporciono source_text, usarlo directamente
-        "STOP"          — no hay source_text ni autorizacion para imagen -> pedir al usuario
-        "EXTRACT_IMAGE" — el usuario dijo explicitamente usar el texto de la imagen
+        "USE_TEXT"      — el usuario pego el copy: usarlo literalmente
+        "EXTRACT_IMAGE" — no hay texto pegado pero la imagen lo contiene: extraerlo y
+                          usarlo automaticamente, sin pedir confirmacion ni autorizacion
+        "STOP"          — no hay copy en ningun lado: error claro, nunca una pregunta
     """
-    # Caso A: el usuario proporciono source_text
     if source_text_provided:
         return "USE_TEXT", source_text_provided
-
-    # Caso C: el usuario explícitamente dijo usar texto de la imagen
-    user_lower = user_message.lower()
-    if any(phrase in user_lower for phrase in _IMAGE_TEXT_PHRASES):
-        return "EXTRACT_IMAGE", "El usuario autorizo extraccion de texto de la imagen"
-
-    # Caso B: no hay source_text y no hay autorizacion -> STOP
-    return "STOP", "No recibi el source_text del carrusel. Pegalo completo para continuar."
+    if image_has_legible_text:
+        return "EXTRACT_IMAGE", "Copy extraido de la imagen de referencia (automatico)"
+    return "STOP", ("No hay copy del carrusel: ni texto pegado ni texto legible en la imagen de "
+                    "referencia")
 
 
 # ---------------------------------------------------------------------------
@@ -212,17 +209,18 @@ def test_2_brief_completo_con_todos_los_campos_pasa_load_brief():
 
 def test_3_sin_source_text_resultado_es_stop():
     """
-    Cuando el usuario no proporciona source_text y no dice 'usar texto de la imagen',
-    la logica de PASO 3 debe retornar STOP con el mensaje correcto.
+    Sin copy pegado y sin texto legible en la imagen -> STOP con un error claro, que NO
+    pide al usuario que pegue nada ni hace preguntas (FABRICA AUTONOMA).
     """
     action, msg = _evaluate_source_text_situation(
         user_message="Crea un carrusel con esta imagen. Ejecuta el flujo completo.",
         source_text_provided=None,
+        image_has_legible_text=False,
     )
-    ok = action == "STOP" and "Pegalo completo" in msg
+    ok = action == "STOP" and "No hay copy" in msg and "Pegalo" not in msg and "?" not in msg
     report(
         "TEST 3",
-        "Sin source_text y sin autorizacion de imagen -> accion STOP con mensaje correcto",
+        "Sin copy ni texto en la imagen -> STOP con error claro, sin pedir que se pegue ni preguntar",
         ok,
         f"action={action!r} msg={msg!r}",
     )
@@ -257,11 +255,12 @@ def test_4_source_text_explicito_retorna_use_text():
 
 def test_5_usar_texto_de_imagen_explicito_retorna_extract_image():
     """
-    Cuando el usuario dice EXPLICITAMENTE 'usar texto de la imagen' (u equivalente),
-    la logica de PASO 3 debe retornar EXTRACT_IMAGE — nunca STOP.
-    Verifica todas las frases equivalentes reconocidas.
+    Si no hay texto pegado pero la imagen de referencia contiene el copy, la logica de
+    PASO 3 debe retornar EXTRACT_IMAGE automaticamente — con o sin frases de
+    autorizacion, nunca STOP y nunca pidiendo que se vuelva a pegar el texto.
     """
     test_cases = [
+        "Crea un carrusel con esta imagen.",
         "Crea el carrusel, usar texto de la imagen como source_text",
         "Ejecuta el flujo. usa el texto de la imagen",
         "Extrae el texto de la referencia para el carrusel",
@@ -275,6 +274,7 @@ def test_5_usar_texto_de_imagen_explicito_retorna_extract_image():
         action, _ = _evaluate_source_text_situation(
             user_message=msg,
             source_text_provided=None,
+            image_has_legible_text=True,
         )
         if action != "EXTRACT_IMAGE":
             all_ok = False
@@ -283,7 +283,7 @@ def test_5_usar_texto_de_imagen_explicito_retorna_extract_image():
 
     report(
         "TEST 5",
-        "Frases equivalentes a 'usar texto de la imagen' retornan EXTRACT_IMAGE (no STOP)",
+        "Copy dentro de la imagen -> EXTRACT_IMAGE automatico (no STOP, sin autorizacion)",
         all_ok,
         failed_case if not all_ok else f"{len(test_cases)} frases evaluadas correctamente",
     )

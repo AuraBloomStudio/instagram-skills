@@ -98,6 +98,9 @@ _DENSITY_MEDIUM_MAX = 15
 # Porcentaje de area de texto por densidad
 _TEXT_AREA_PCT = {"LOW": 15, "MEDIUM": 25, "HIGH": 40}
 
+# Valores validos de text_break_reason (SKILL.md PASO 6.6)
+_VALID_BREAK_REASONS = ("natural_sentence_boundary", "paragraph_boundary", "density_rebalance")
+
 
 # ---------------------------------------------------------------------------
 # Helpers de tiempo
@@ -139,6 +142,11 @@ def compute_slide_fields(slide_in: Dict[str, Any]) -> Dict[str, Any]:
 
     # text_area_percentage
     slide["text_area_percentage"] = _TEXT_AREA_PCT[density]
+
+    # text_break_reason: siempre presente y con un valor valido (brief completo desde el
+    # primer intento; ver SKILL.md PASO 6.6). Si falta o no es valido -> corte natural.
+    if slide.get("text_break_reason") not in _VALID_BREAK_REASONS:
+        slide["text_break_reason"] = "natural_sentence_boundary"
 
     # visual_balance: heuristica sobre text_placement
     lower_kw = ("lower", "inferior", "bottom")
