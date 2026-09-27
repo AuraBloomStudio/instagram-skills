@@ -67,7 +67,7 @@ import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -156,10 +156,20 @@ def compute_slide_fields(slide_in: Dict[str, Any]) -> Dict[str, Any]:
 # Extraccion de referencia
 # ---------------------------------------------------------------------------
 
-def save_reference(bundle_path: Path, session_id: str, skip: bool, fake_ref: Optional[str]) -> Tuple[bool, str]:
+REFERENCE_NOT_IDENTIFIED = "REFERENCE_IMAGE_NOT_IDENTIFIED"
+
+
+def save_reference(bundle_path: Path, session_id: str, skip: bool, fake_ref: Optional[str],
+                   selection: Optional[Dict[str, Any]] = None) -> Tuple[bool, str]:
     """
-    Guarda viral-reference.png en bundle_path/carousel/assets/.
-    Retorna (ok, mensaje).
+    Guarda la REFERENCE_IMAGE como viral-reference.png en bundle_path/carousel/assets/.
+    La referencia es SIEMPRE la imagen que el usuario adjunta con el copy, identificada
+    EXPLICITAMENTE en claude_decisions.json -> reference_image:
+      {"message_text_contains": "<fragmento del copy>"} |
+      {"attachment_index": N, "sha256_prefix": "<8+ hex>"}
+    Nunca "la ultima imagen adjunta"; el mockup del producto es un asset interno
+    (products.json) y nunca es la referencia. Si no se identifica de forma inequivoca:
+    REFERENCE_IMAGE_NOT_IDENTIFIED (error claro, nunca una pregunta). Retorna (ok, mensaje).
     """
     dest_dir = bundle_path / "carousel" / "assets"
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -174,19 +184,41 @@ def save_reference(bundle_path: Path, session_id: str, skip: bool, fake_ref: Opt
             return False, "STOP: --skip-reference pero viral-reference.png no existe en el bundle"
         return True, f"[T2] Referencia reutilizada: {dest}"
 
+    selection = selection or {}
+    if selection.get("attachment_index") is not None:
+        selector = ["--attachment-index", str(selection["attachment_index"]),
+                    "--sha256-prefix", str(selection.get("sha256_prefix") or "")]
+    elif selection.get("message_text_contains"):
+        selector = ["--message-text-contains", str(selection["message_text_contains"])]
+    else:
+        return False, (f"STOP: {REFERENCE_NOT_IDENTIFIED}: claude_decisions.json no indica que imagen es la "
+                       f"referencia (reference_image). Nunca se usa la ultima imagen adjunta.")
+
     if not session_id:
         return False, "STOP: CLAUDE_CODE_SESSION_ID no encontrado en el entorno"
 
     env = dict(os.environ)
     env["CLAUDE_CODE_SESSION_ID"] = session_id
     result = subprocess.run(
-        [sys.executable, str(SAVE_REF_SCRIPT), str(dest)],
+        [sys.executable, str(SAVE_REF_SCRIPT), str(dest)] + selector,
         capture_output=True, text=True, encoding="utf-8", env=env,
     )
     if result.returncode != 0:
         msg = (result.stdout or result.stderr or "Error desconocido").strip()
-        return False, f"STOP: save_reference_image.py fallo: {msg}"
-    return True, f"[T2] Referencia guardada: {dest}\n{result.stdout.strip()}"
+        return False, f"STOP: {msg}"
+    return True, f"[T2] REFERENCE_IMAGE guardada: {dest}\n{result.stdout.strip()}"
+
+
+def reference_is_product_mockup(bundle_path: Path) -> bool:
+    """True si la REFERENCE_IMAGE guardada es el mockup interno del producto (mismo
+    sha256 que products.json -> mockup_sha256). El mockup nunca puede ser la referencia."""
+    ref = bundle_path / "carousel" / "assets" / "viral-reference.png"
+    try:
+        entry = json.loads(PRODUCTS_JSON.read_text(encoding="utf-8"))["products"][FIXED_PRODUCT_NAME]
+        expected = (entry.get("mockup_sha256") or "").lower()
+    except (OSError, json.JSONDecodeError, KeyError):
+        return False
+    return bool(expected) and ref.is_file() and _sha256(ref) == expected
 
 
 # ---------------------------------------------------------------------------
@@ -225,11 +257,29 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _resolve_skill_relative(mockup_path: str, skill_dir: Path) -> Path:
+    """
+    PORTABILIDAD (2026-09-26): el mockup vive versionado DENTRO de la skill y mockup_path
+    es relativo al directorio de la skill (el de products.json). Se rechaza cualquier ruta
+    absoluta (C:\\..., /home/..., /root/...) o que salga de la skill (../), en cualquier SO.
+    """
+    posix = mockup_path.replace("\\", "/")
+    if PureWindowsPath(mockup_path).drive or posix.startswith("/"):
+        raise MockupError(f"ERROR DE CONFIGURACION DE LA SKILL: mockup_path debe ser relativo a la skill, "
+                          f"no una ruta absoluta: {mockup_path}")
+    root = skill_dir.resolve()
+    candidate = root.joinpath(*PurePosixPath(posix).parts).resolve()
+    if candidate != root and root not in candidate.parents:
+        raise MockupError(f"ERROR DE CONFIGURACION DE LA SKILL: mockup_path sale del directorio de la skill: {mockup_path}")
+    return candidate
+
+
 def find_product_mockup() -> Path:
     """
     Devuelve la ruta del mockup ORIGINAL APROBADO de FIXED_PRODUCT_NAME, leida de
-    products.json (mockup_path) y verificada contra mockup_sha256. Nunca busca en bundles
-    anteriores ni crea un sustituto: si falta o no coincide, lanza MockupError.
+    products.json (mockup_path, RELATIVO a la skill) y verificada contra mockup_sha256.
+    Nunca busca en bundles anteriores ni crea un sustituto: si falta o no coincide, lanza
+    MockupError (error de configuracion de la skill, nunca una pregunta al usuario).
     """
     try:
         entry = json.loads(PRODUCTS_JSON.read_text(encoding="utf-8"))["products"][FIXED_PRODUCT_NAME]
@@ -239,7 +289,7 @@ def find_product_mockup() -> Path:
     expected_sha = (entry.get("mockup_sha256") or "").lower()
     if not mockup_path or not expected_sha:
         raise MockupError(f"products.json no define 'mockup_path' y 'mockup_sha256' para '{FIXED_PRODUCT_NAME}'")
-    src = Path(mockup_path)
+    src = _resolve_skill_relative(mockup_path, PRODUCTS_JSON.parent)
     if not src.is_file():
         raise MockupError(f"el mockup original aprobado no existe en: {src}")
     actual_sha = _sha256(src)
@@ -460,9 +510,14 @@ def main() -> int:
 
     # 3. Extraer referencia
     session_id = os.environ.get("CLAUDE_CODE_SESSION_ID", "")
-    ok, ref_msg = save_reference(bundle_path, session_id, args.skip_reference, args.fake_reference)
+    ok, ref_msg = save_reference(bundle_path, session_id, args.skip_reference, args.fake_reference,
+                                 decisions.get("reference_image"))
     print(ref_msg)
     if not ok:
+        return 1
+    if reference_is_product_mockup(bundle_path):
+        print(f"STOP: {REFERENCE_NOT_IDENTIFIED}: la imagen seleccionada es el mockup interno del producto, "
+              f"no la imagen de referencia del usuario.")
         return 1
     timing["T2"] = _now_iso()
 
@@ -500,8 +555,9 @@ def main() -> int:
     try:
         brief = build_brief(decisions, bundle_id, bundle_path, timing)
     except MockupError as e:
-        print(f"STOP: No se puede mostrar {FIXED_PRODUCT_NAME} sin su mockup original aprobado: {e}")
-        print("      No se genera ningun mockup sustituto. Restaura el archivo original y vuelve a ejecutar.")
+        print(f"STOP: ERROR DE CONFIGURACION DE LA SKILL (mockup de {FIXED_PRODUCT_NAME}): {e}")
+        print("      El mockup aprobado debe estar versionado en la skill (assets/, ver products.json). "
+              "No se genera ningun mockup sustituto.")
         return 1
     timing["T6"] = _now_iso()
     print(f"[T6] Brief construido en memoria")
