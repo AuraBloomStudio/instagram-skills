@@ -1,34 +1,52 @@
 #!/usr/bin/env python3
 """
-Guarda la imagen de referencia viral del transcript JSONL de la sesion actual.
+Guarda la REFERENCE_IMAGE (imagen de referencia viral) del transcript JSONL de la
+sesion actual, identificada EXPLICITAMENTE.
 
-Mecanismo: leer el transcript JSONL identificado por CLAUDE_CODE_SESSION_ID,
-recorrer los mensajes en orden y extraer el ULTIMO bloque type:image de usuario.
-Ese bloque contiene el attachment que el usuario adjunto en esta ejecucion.
+REGLA PERMANENTE (2026-09-26): nunca se usa automaticamente "la ultima imagen
+adjunta" ni "la ultima imagen de la sesion". El mockup del producto es un asset interno
+de la skill (assets/, ver products.json) y nunca se toma de la conversacion. La
+referencia se selecciona de una de estas dos formas:
+
+  1. --message-text-contains "<fragmento del copy>": la imagen adjunta en el MISMO
+     mensaje del usuario que contiene ese texto (flujo normal: una imagen + el copy).
+     Debe existir exactamente un mensaje con ese texto y exactamente una imagen en el.
+  2. --attachment-index N --sha256-prefix P: la imagen N (1-based, en orden de la
+     sesion, ver --list) cuyo sha256 empieza por P (minimo 8 caracteres hex).
+
+Si no se puede identificar de forma inequivoca, termina con:
+  REFERENCE_IMAGE_NOT_IDENTIFIED: <motivo>        (exit 2, nunca una pregunta)
 
 NO usa clipboard. NO busca bundles anteriores. NO busca AppData/Temp/Downloads.
 NO acepta imagenes de sesiones distintas a la actual.
 
 Registro de auditoria en <dest_dir>/reference_audit.json:
-  session_id, message_timestamp, media_type, size_bytes, dimensions, sha256, mechanism
+  role=REFERENCE_IMAGE, selection, attachment_index, session_id, message_timestamp,
+  media_type, size_bytes, dimensions, sha256, mechanism
 
 Uso:
-    python3 save_reference_image.py <dest_path>
-
-    dest_path: ruta destino absoluta, ej.
-      C:\\...\\outputs\\bundles\\2026-09-18-mi-carrusel\\carousel\\assets\\viral-reference.png
+    python3 save_reference_image.py --list
+    python3 save_reference_image.py <dest_path> --message-text-contains "<texto>"
+    python3 save_reference_image.py <dest_path> --attachment-index N --sha256-prefix P
 
 Exit codes:
-    0 - archivo guardado y validado correctamente
-    1 - STOP (sin imagen, sesion no encontrada, o error de IO)
+    0 - archivo guardado y validado correctamente (o listado impreso)
+    1 - STOP (sesion/transcript no encontrado, o error de IO)
+    2 - REFERENCE_IMAGE_NOT_IDENTIFIED
 """
-import sys
-import os
-import json
+import argparse
 import base64
 import hashlib
+import json
+import os
 import pathlib
+import re
+import sys
 from datetime import datetime, timezone
+
+NOT_IDENTIFIED = "REFERENCE_IMAGE_NOT_IDENTIFIED"
+_MIN_SHA_PREFIX = 8
+_MIN_TEXT_SNIPPET = 20
 
 
 # ---------------------------------------------------------------------------
@@ -54,56 +72,99 @@ def find_transcript(session_id: str) -> "pathlib.Path | None":
 
 
 # ---------------------------------------------------------------------------
-# Extraer el ultimo bloque image del transcript
+# Enumerar las imagenes adjuntas por el usuario (nunca elegir "la ultima")
 # ---------------------------------------------------------------------------
 
-def extract_last_image(transcript_path: pathlib.Path) -> "dict | None":
-    """
-    Recorre el JSONL en orden y retorna el ULTIMO bloque type:image
-    perteneciente a un mensaje de usuario.
+def _normalize(text: str) -> str:
+    return re.sub(r"\s+", " ", text or "").strip().lower()
 
-    La imagen mas reciente es siempre la que el usuario acaba de adjuntar,
-    garantizando que la referencia corresponde a ESTA ejecucion.
 
-    Retorna None si no hay ningun bloque de imagen.
+def list_user_images(transcript_path: pathlib.Path) -> list:
     """
-    last_image = None
+    Todas las imagenes adjuntas por el usuario en la sesion, en orden, con su indice
+    (1-based), sha256, mensaje de origen y el texto de ese mismo mensaje.
+    """
+    images = []
+    message_number = 0
     with open(transcript_path, "r", encoding="utf-8", errors="replace") as f:
         for line in f:
-            # Filtro rapido antes de parsear JSON completo (el JSONL puede ser grande)
-            if '"image"' not in line:
+            if '"user"' not in line:
                 continue
             try:
                 entry = json.loads(line)
             except json.JSONDecodeError:
                 continue
-
             if entry.get("type") != "user":
                 continue
-
             content = entry.get("message", {}).get("content", [])
             if not isinstance(content, list):
                 continue
-
+            message_number += 1
+            text = " ".join(b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text")
+            position = 0
             for block in content:
-                if block.get("type") != "image":
+                if not isinstance(block, dict) or block.get("type") != "image":
                     continue
                 src = block.get("source", {})
-                if src.get("type") != "base64":
-                    continue
-                data = src.get("data", "")
+                data = src.get("data", "") if src.get("type") == "base64" else ""
                 if not data:
                     continue
-                # Este es un candidato valido — sobrescribir last_image para
-                # garantizar que al terminar el loop tenemos el MAS RECIENTE
-                last_image = {
-                    "data": data,
-                    "media_type": src.get("media_type", "image/png"),
+                try:
+                    raw = base64.b64decode(data)
+                except Exception:  # noqa: BLE001 - adjunto corrupto: no es candidato
+                    continue
+                position += 1
+                images.append({
+                    "attachment_index": len(images) + 1,
+                    "message_number": message_number,
+                    "position_in_message": position,
                     "timestamp": entry.get("timestamp", ""),
                     "session_id": entry.get("sessionId", ""),
-                }
+                    "media_type": src.get("media_type", "image/png"),
+                    "size_bytes": len(raw),
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                    "message_text": text,
+                    "_bytes": raw,
+                })
+    return images
 
-    return last_image
+
+def select_reference(images: list, attachment_index=None, sha256_prefix=None,
+                     message_text_contains=None) -> "tuple[dict | None, str]":
+    """
+    Devuelve (imagen, "") si la REFERENCE_IMAGE se identifica de forma inequivoca, o
+    (None, motivo) si no. Nunca cae en "la ultima imagen".
+    """
+    if not images:
+        return None, "la sesion no contiene ninguna imagen adjunta por el usuario"
+
+    if attachment_index is not None:
+        prefix = (sha256_prefix or "").lower()
+        if len(prefix) < _MIN_SHA_PREFIX or not re.fullmatch(r"[0-9a-f]+", prefix):
+            return None, f"--attachment-index requiere --sha256-prefix de al menos {_MIN_SHA_PREFIX} caracteres hex"
+        match = [img for img in images if img["attachment_index"] == attachment_index]
+        if not match:
+            return None, f"no existe la imagen adjunta numero {attachment_index} (hay {len(images)})"
+        if not match[0]["sha256"].startswith(prefix):
+            return None, (f"la imagen {attachment_index} no coincide con el sha256 indicado "
+                          f"({match[0]['sha256'][:12]}... != {prefix}...)")
+        return match[0], ""
+
+    if message_text_contains is not None:
+        snippet = _normalize(message_text_contains)
+        if len(snippet) < _MIN_TEXT_SNIPPET:
+            return None, f"--message-text-contains requiere al menos {_MIN_TEXT_SNIPPET} caracteres"
+        candidates = [img for img in images if snippet in _normalize(img["message_text"])]
+        messages = {img["message_number"] for img in candidates}
+        if not candidates:
+            return None, "ningun mensaje con imagen contiene ese texto"
+        if len(messages) > 1:
+            return None, f"{len(messages)} mensajes con imagen contienen ese texto"
+        if len(candidates) > 1:
+            return None, f"el mensaje con ese texto tiene {len(candidates)} imagenes adjuntas"
+        return candidates[0], ""
+
+    return None, "no se indico que imagen es la referencia (nunca se usa la ultima adjunta)"
 
 
 # ---------------------------------------------------------------------------
@@ -134,12 +195,13 @@ def validate_image(path: pathlib.Path) -> "tuple[int, int, str]":
 # ---------------------------------------------------------------------------
 
 def main() -> int:
-    if len(sys.argv) < 2:
-        print("ERROR: uso: save_reference_image.py <dest_path>", file=sys.stderr)
-        return 1
-
-    dest = pathlib.Path(sys.argv[1]).resolve()
-    dest.parent.mkdir(parents=True, exist_ok=True)
+    parser = argparse.ArgumentParser(description="Guarda la REFERENCE_IMAGE identificada explicitamente")
+    parser.add_argument("dest_path", nargs="?")
+    parser.add_argument("--list", action="store_true", help="Lista las imagenes adjuntas de la sesion y sale")
+    parser.add_argument("--attachment-index", type=int, default=None)
+    parser.add_argument("--sha256-prefix", default=None)
+    parser.add_argument("--message-text-contains", default=None)
+    args = parser.parse_args()
 
     # 1. Obtener session ID del entorno
     session_id = os.environ.get("CLAUDE_CODE_SESSION_ID", "")
@@ -159,31 +221,40 @@ def main() -> int:
         )
         return 1
 
-    # 3. Extraer el ultimo bloque image de usuario en el transcript de ESTA sesion
-    image_data = extract_last_image(transcript)
-    if not image_data:
-        print(
-            "STOP: El transcript de esta sesion no contiene ningun attachment de imagen. "
-            "Adjunta la imagen de referencia (arrastra desde Explorer o copia al portapapeles) "
-            "y ejecuta el skill de nuevo."
-        )
+    images = list_user_images(transcript)
+
+    if args.list:
+        listing = [{k: v for k, v in img.items() if k != "_bytes"} for img in images]
+        for item in listing:
+            item["message_text"] = item["message_text"][:120]
+        print(json.dumps(listing, ensure_ascii=False, indent=2))
+        return 0
+
+    if not args.dest_path:
+        print("ERROR: falta dest_path (o usa --list)", file=sys.stderr)
         return 1
 
-    # 4. Decodificar base64 (sin imprimir los bytes)
-    try:
-        img_bytes = base64.b64decode(image_data["data"])
-    except Exception as e:
-        print(f"STOP: Error decodificando base64 del attachment: {e}")
-        return 1
+    # 3. Seleccionar la REFERENCE_IMAGE de forma explicita e inequivoca
+    image, reason = select_reference(
+        images, attachment_index=args.attachment_index, sha256_prefix=args.sha256_prefix,
+        message_text_contains=args.message_text_contains,
+    )
+    if image is None:
+        print(f"{NOT_IDENTIFIED}: {reason}")
+        return 2
 
-    # 5. Escribir archivo destino
+    dest = pathlib.Path(args.dest_path).resolve()
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    img_bytes = image["_bytes"]
+
+    # 4. Escribir archivo destino
     try:
         dest.write_bytes(img_bytes)
     except Exception as e:
         print(f"STOP: Error escribiendo {dest}: {e}")
         return 1
 
-    # 6. Validar: archivo existe, tamano > 0, imagen valida, dimensiones validas
+    # 5. Validar: archivo existe, tamano > 0, imagen valida, dimensiones validas
     size = dest.stat().st_size
     if size == 0:
         print(f"STOP: El archivo guardado esta vacio: {dest}")
@@ -202,29 +273,33 @@ def main() -> int:
         dest.unlink(missing_ok=True)
         return 1
 
-    # 7. SHA-256 del archivo guardado (para auditoria)
-    sha256 = hashlib.sha256(img_bytes).hexdigest()
-
-    # 8. Registro de auditoria en reference_audit.json junto al archivo
+    # 6. Registro de auditoria en reference_audit.json junto al archivo
+    selection = ({"method": "attachment_index", "attachment_index": args.attachment_index,
+                  "sha256_prefix": args.sha256_prefix}
+                 if args.attachment_index is not None
+                 else {"method": "message_text_contains", "message_text_contains": args.message_text_contains})
     audit = {
-        "session_id": image_data["session_id"] or session_id,
-        "message_timestamp": image_data["timestamp"],
-        "media_type": image_data["media_type"],
+        "role": "REFERENCE_IMAGE",
+        "selection": selection,
+        "attachment_index": image["attachment_index"],
+        "images_in_session": len(images),
+        "session_id": image["session_id"] or session_id,
+        "message_timestamp": image["timestamp"],
+        "media_type": image["media_type"],
         "size_bytes": size,
         "dimensions": {"width": width, "height": height},
-        "sha256": sha256,
+        "sha256": image["sha256"],
         "saved_at": datetime.now(timezone.utc).isoformat(),
-        "mechanism": "session_transcript_jsonl",
+        "mechanism": "session_transcript_jsonl_explicit_selection",
         "transcript_file": transcript.name,
     }
     audit_path = dest.parent / "reference_audit.json"
-    audit_path.write_text(json.dumps(audit, indent=2), encoding="utf-8")
+    audit_path.write_text(json.dumps(audit, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    # 9. Resumen (sin imprimir datos de imagen)
-    print(f"OK: {dest}")
-    print(f"    {size:,} bytes | {width}x{height} | {fmt}")
-    print(f"    sha256: {sha256[:32]}...")
-    print(f"    Fuente: {transcript.name} | ts={image_data['timestamp']}")
+    # 7. Resumen (sin imprimir datos de imagen)
+    print(f"OK: REFERENCE_IMAGE -> {dest}")
+    print(f"    imagen adjunta {image['attachment_index']} de {len(images)} | {size:,} bytes | {width}x{height} | {fmt}")
+    print(f"    sha256: {image['sha256'][:32]}...")
     print(f"    Auditoria: {audit_path}")
     return 0
 

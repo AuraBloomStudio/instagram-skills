@@ -683,8 +683,9 @@ def test_17_mockup_ausente_o_distinto_stop():
         wrong_file = tmp / "otro-mockup.png"
         wrong_file.write_bytes(_tiny_png())
         for label, entry in (
-            ("archivo inexistente", {"mockup_path": str(tmp / "no-existe.png"), "mockup_sha256": "0" * 64}),
-            ("hash distinto", {"mockup_path": str(wrong_file), "mockup_sha256": "0" * 64}),
+            # Rutas RELATIVAS al directorio de products.json (regla de portabilidad).
+            ("archivo inexistente", {"mockup_path": "no-existe.png", "mockup_sha256": "0" * 64}),
+            ("hash distinto", {"mockup_path": wrong_file.name, "mockup_sha256": "0" * 64}),
             ("sin configurar", {}),
         ):
             fake_products = tmp / "products.json"

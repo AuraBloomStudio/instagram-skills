@@ -36,7 +36,7 @@ dice "preguntar", "confirmar" o "elegir" alguno de estos puntos, manda ESTA secc
 | Enlace | `https://eldolorquenotepertenece.com?utm_source=facebook&utm_medium=organic&utm_campaign=constelaciones_familiares&utm_content=DP-CF001` (exacto, sin pedir confirmacion, nunca otro) | `carousel_common.FIXED_PURCHASE_URL` (igual en `products.json`) |
 | Hashtags | **Exactamente 8** | `carousel_common.FIXED_HASHTAG_COUNT` |
 | Descripcion, CTA, hashtags | Claude los redacta SIEMPRE a partir del copy y del carrusel (PASO 10.2-10.4). Nunca se omiten ni se preguntan. | `prepare_carousel.validate_fixed_rules` |
-| Mockup del producto | El mockup ORIGINAL aprobado: `products.json` → `mockup_path` + `mockup_sha256` (`0f8853cb…`) | `prepare_carousel.find_product_mockup` |
+| Mockup del producto | El mockup ORIGINAL aprobado, versionado en la skill: `assets/el-dolor-que-no-te-pertenece-mockup.png` (`products.json` → `mockup_path` RELATIVO a la skill + `mockup_sha256` `0f8853cb…`) | `prepare_carousel.find_product_mockup` |
 
 **Preguntas prohibidas**: formato, cantidad de slides, tipo de carrusel, producto,
 enlace, CTA, descripcion, hashtags, aprobacion del brief o cualquier otra decision de
@@ -62,9 +62,16 @@ autoriza inventar contenido.
 **Mockup original**: cuando un slide muestra EL DOLOR QUE NO TE PERTENECE
 (`uses_product_mockup_directly: true`, normalmente el slide 10 de CTA), se usa UNICAMENTE
 el archivo de `products.json` → `mockup_path`, verificado con `mockup_sha256`. Nunca se
-busca en bundles anteriores, nunca se crea ni se genera un mockup sustituto. Si el archivo
-no existe o su sha256 no coincide, `prepare_carousel.py` se DETIENE explicando que falta
-— Claude informa al usuario que archivo falta y no continua ese paso.
+busca en bundles anteriores, nunca se crea ni se genera un mockup sustituto.
+
+**Portabilidad (regla permanente)**: el mockup es un ASSET INTERNO versionado dentro de
+la skill (`assets/el-dolor-que-no-te-pertenece-mockup.png`) y `mockup_path` es una ruta
+RELATIVA al directorio de la skill, resuelta por `prepare_carousel.find_product_mockup`.
+Funciona igual en el PC y en Claude Code cloud: nunca rutas absolutas (`C:\Users\...`,
+`/home/...`, `/root/...`); una ruta absoluta o que salga de la skill se rechaza. El
+usuario NUNCA adjunta el mockup. Si el asset falta o su sha256 no coincide, es un ERROR
+DE CONFIGURACION DE LA SKILL: `prepare_carousel.py` se detiene con ese mensaje, sin
+sustituto y sin preguntar nada al usuario.
 
 ### REGLA PERMANENTE DE REGENERACIÓN (autonomía total — prevalece sobre cualquier otra sección)
 
@@ -482,7 +489,8 @@ el usuario las pida.
 
 **CONFIGURACIÓN FIJA**: para EL DOLOR QUE NO TE PERTENECE el mockup NO lo adjunta el
 usuario: `prepare_carousel.py` copia automaticamente el original aprobado desde
-`products.json` → `mockup_path` (verificado con `mockup_sha256`) a
+`assets/` dentro de la propia skill (`products.json` → `mockup_path` relativo,
+verificado con `mockup_sha256`) a
 `carousel/assets/book-mockup-original.png` y crea el bloque `product_mockup`. Nunca se
 toma de un bundle anterior. Si falta o no coincide el hash: STOP, sin sustituto (el punto
 1 de abajo — "cubierta generica como fallback" — NO aplica a este producto).
@@ -795,25 +803,29 @@ En PASO 1 ocurre SOLO:
 1. El usuario adjunta la imagen → Claude la recibe y la ve en la conversacion.
 2. Claude registra mentalmente el timestamp `reference_received_at` para el timing.
 
-`prepare_carousel.py` (PASO 8) ejecuta internamente `save_reference_image.py` como parte
-de su pipeline determinista — lee el transcript JSONL de esta sesion y extrae el ULTIMO
-bloque image de usuario, que corresponde exactamente al attachment de este carrusel.
+**REFERENCE_IMAGE (regla permanente)**: la referencia es SIEMPRE la imagen que el usuario
+adjunta al iniciar el carrusel, identificada EXPLICITAMENTE. Nunca se usa "la ultima
+imagen adjunta" ni "la ultima imagen de la sesion", nunca el mockup del producto (asset
+interno de la skill, ver "CONFIGURACIÓN FIJA") y nunca una imagen de `products.json`.
+Flujo normal: el usuario adjunta UNA imagen y pega el copy en el mismo mensaje; Claude
+escribe en `claude_decisions.json` → `reference_image`:
+- `{"message_text_contains": "<primeros ~60 caracteres del copy>"}` (forma normal): la
+  imagen adjunta en el MISMO mensaje que el copy;
+- `{"attachment_index": N, "sha256_prefix": "<8+ hex>"}`: solo si la imagen llego en
+  otro mensaje (N y el sha256 se obtienen con `save_reference_image.py --list`).
 
-**Mecanismo oficial** (ejecutado por prepare_carousel.py, no por Claude):
-  Claude Desktop attachment → transcript JSONL de CLAUDE_CODE_SESSION_ID → `viral-reference.png`
-
-El script lee el transcript JSONL identificado por `CLAUDE_CODE_SESSION_ID` (disponible
-como variable de entorno en toda sesion de Claude Code), recorre los mensajes en orden y
-extrae el ULTIMO bloque `type:image` de usuario. Ese bloque contiene exactamente el
-attachment que el usuario adjunto en esta ejecucion.
-
-**Garantia de identidad**: la imagen extraida es la mas reciente en el transcript de ESTA
-sesion. Si el usuario adjunto varias imagenes en la misma sesion, siempre se usa la
-ultima — que es la que envio justo ahora para este carrusel.
+`prepare_carousel.py` (PASO 8) ejecuta `save_reference_image.py` con esa seleccion: lee
+el transcript JSONL de `CLAUDE_CODE_SESSION_ID`, enumera las imagenes adjuntas por el
+usuario y extrae UNICAMENTE la indicada. Si no se identifica de forma inequivoca (varias
+imagenes o mensajes que coinciden, indice y sha256 que no cuadran, o nada indicado), o si
+la imagen elegida es el propio mockup del producto, termina con
+`REFERENCE_IMAGE_NOT_IDENTIFIED: <motivo>`: Claude transmite el error y termina, sin
+preguntar que imagen usar.
 
 **Registro de auditoria**: el script escribe `carousel/assets/reference_audit.json` con:
-`session_id`, `message_timestamp`, `media_type`, `size_bytes`, `dimensions`, `sha256`,
-`mechanism: "session_transcript_jsonl"`. Este registro permite verificar en cualquier
+`role: "REFERENCE_IMAGE"`, `selection`, `attachment_index`, `session_id`,
+`message_timestamp`, `media_type`, `size_bytes`, `dimensions`, `sha256`,
+`mechanism: "session_transcript_jsonl_explicit_selection"`. Este registro permite verificar en cualquier
 momento que imagen fue utilizada y de que mensaje provino.
 
 **Validaciones que el script realiza antes de retornar OK**:
@@ -828,6 +840,9 @@ otra operacion posterior):
 Adjunta la imagen de referencia y ejecuta el skill de nuevo."
 
 **PROHIBIDO sin excepcion:**
+- Usar "la ultima imagen adjunta" o la ultima imagen de la sesion como referencia
+- Usar el mockup del producto (asset interno) o una imagen de `products.json` como referencia
+- Pedir al usuario que adjunte el mockup del producto
 - Usar clipboard (`ImageGrab.grabclipboard()`) como mecanismo alternativo
 - Buscar en bundles anteriores para "completar" la referencia de esta ejecucion
 - Reutilizar `viral-reference.png` de una ejecucion anterior aunque el ADN visual parezca
@@ -1375,6 +1390,7 @@ Claude construye este objeto en un bloque de codigo y luego lo escribe en UNA op
 {
   "bundle_id": "YYYY-MM-DD-slug",
   "source_text": "Texto completo del post viral tal como lo entrego el usuario",
+  "reference_image": {"message_text_contains": "Primeros ~60 caracteres del copy del usuario"},
   "carousel_type": "carrusel_interactivo",
   "visual_dna": {
     "slide_1_master_dna": {
@@ -1414,7 +1430,8 @@ Claude construye este objeto en un bloque de codigo y luego lo escribe en UNA op
 `copy.purchase_url` los impone `prepare_carousel.py` con los valores fijos aunque vengan
 distintos. `slides` debe tener EXACTAMENTE 10 elementos con `exact_text` distintos entre
 si; `copy.hashtags` EXACTAMENTE 8. Si algo de esto no se cumple, el script responde
-`STOP: Configuracion fija no cumplida` y no crea el bundle.
+`STOP: Configuracion fija no cumplida` y no crea el bundle. `reference_image` es
+OBLIGATORIO (ver PASO 1 › REFERENCE_IMAGE); sin el, `REFERENCE_IMAGE_NOT_IDENTIFIED`.
 
 #### Mostrar tabla de slides ANTES de ejecutar
 
@@ -1446,7 +1463,8 @@ PYTHONUNBUFFERED=1 python3 "$HOME/.claude/skills/carousel-gen/scripts/prepare_ca
 
 `prepare_carousel.py` ejecuta autonomamente:
 - Crea `outputs/bundles/[bundle_id]/carousel/assets/`
-- Extrae `viral-reference.png` del transcript JSONL (via `save_reference_image.py`)
+- Extrae la REFERENCE_IMAGE indicada en `reference_image` (via `save_reference_image.py`)
+  como `viral-reference.png` — nunca la ultima imagen adjunta ni el mockup
 - Resuelve la URL del producto desde `products.json` si es necesario
 - Copia el mockup del producto si algun slide lo usa
 - Calcula los 5 campos computados por slide (`word_count`, `text_density`, etc.)
