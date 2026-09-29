@@ -217,11 +217,16 @@ def save_image_and_qa(
     critical_phrases: Optional[List[tuple]] = None,
     authorized_extra_tokens: Optional[List[str]] = None,
     uses_product_mockup: bool = False,
+    accent_color: Optional[str] = None,
 ) -> tuple:
     """
     Descarga (guarda) la imagen generada y corre el QA en DOS capas (ver SKILL.md
     "TEXT QA"):
-      1. QA ESTRUCTURAL (qa.py): archivo valido, dimensiones, relacion de aspecto.
+      1. QA ESTRUCTURAL (qa.py): archivo valido, dimensiones, relacion de aspecto, y
+         monocromia (blanco y negro obligatorio, ver SKILL.md "QA VISUAL") — esta ultima
+         se omite si `uses_product_mockup=True`, ya que el mockup conserva sus colores
+         originales por regla explicita. `accent_color` se excluye del conteo de color
+         (es el acento de TEXTO autorizado por "Paleta de texto", no color de la foto).
       2. TEXT QA (text_qa.py): el texto REALMENTE renderizado en la imagen (via OCR
          100% local, sin llamar a Gemini) coincide con `expected_text` (exact_text del
          slide en brief.json). Solo se ejecuta si la capa 1 aprobo — no tiene sentido
@@ -233,7 +238,8 @@ def save_image_and_qa(
     output_path = carousel_dir / f"carousel-{slide_number:02d}.png"
     output_path.write_bytes(image_bytes)
 
-    qa_result = run_qa(output_path, expected_aspect_ratio=config.aspect_ratio)
+    qa_result = run_qa(output_path, expected_aspect_ratio=config.aspect_ratio,
+                        check_color=not uses_product_mockup, accent_color=accent_color)
     if not qa_result.approved:
         return False, output_path, qa_result.reason, None
 
@@ -297,6 +303,10 @@ def process_slides(
     tasks: List[GenerationTask] = []
     slides_by_number = {s["number"]: s for s in slides_to_process}
     critical_phrases_by_slide = critical_phrases_by_slide or {}
+    # Color de acento AUTORIZADO del texto (ver "Paleta de texto") — se excluye del QA de
+    # monocromia (qa.check_monochrome) para no confundir el acento de texto permitido con
+    # contaminacion de color en la fotografia (ver SKILL.md "QA VISUAL").
+    accent_color = (visual_dna.get("slide_1_master_dna") or {}).get("accent_color")
     # Slides que en ALGUNA ronda anterior fueron rechazados especificamente por Text QA
     # (no por QA estructural ni por fallo de generacion) — permite saber, cuando el
     # slide finalmente aprueba, si el error de texto se "arreglo" (para el contador
@@ -427,6 +437,7 @@ def process_slides(
                 expected_text=expected_text, critical_phrases=critical_phrases,
                 authorized_extra_tokens=authorized_extra_tokens,
                 uses_product_mockup=bool(slide_def.get("uses_product_mockup_directly")),
+                accent_color=accent_color,
             )
             return sn, outcome
 

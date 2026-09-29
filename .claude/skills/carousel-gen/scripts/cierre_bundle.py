@@ -87,6 +87,7 @@ def apply_text_fallback(bundle_path: Path, critical_phrases_fn: Optional[Callabl
         return []
     slides_by_number = {s["number"]: s for s in brief.get("slides", [])}
     extra = authorized_tokens_fn(brief) if authorized_tokens_fn else None
+    accent_color = (brief.get("visual_dna", {}).get("slide_1_master_dna") or {}).get("accent_color")
     records: List[Dict[str, Any]] = []
     for entry in manifest.get("carousel", []):
         if entry.get("status") != "TEXT_QA_FAILED":
@@ -107,7 +108,9 @@ def apply_text_fallback(bundle_path: Path, critical_phrases_fn: Optional[Callabl
             shutil.copy2(png, original_copy)
             info = text_fallback.compose_exact_text(png, slide.get("exact_text", ""),
                                                     slide.get("text_placement", ""), candidate)
-            structural = run_qa(candidate, expected_aspect_ratio=manifest.get("aspect_ratio", "4:5"))
+            uses_mockup = bool(slide.get("uses_product_mockup_directly"))
+            structural = run_qa(candidate, expected_aspect_ratio=manifest.get("aspect_ratio", "4:5"),
+                                 check_color=not uses_mockup, accent_color=accent_color)
             if not structural.approved:
                 raise text_fallback.FallbackError(f"QA estructural del respaldo: {structural.reason}")
             phrases = critical_phrases_fn(brief, slide) if critical_phrases_fn else None
@@ -139,7 +142,7 @@ def _review(review_fn: Callable, png: Path, slide: Dict[str, Any]) -> Dict[str, 
 
 
 def _fallback_candidate(bundle_path: Path, slide: Dict[str, Any], png: Path, aspect_ratio: str,
-                        tag: str) -> Path:
+                        tag: str, accent_color: Optional[str] = None) -> Path:
     """Compone el texto exacto sobre `png` (la escena/mockup no cambian) y pasa el QA estructural."""
     num = slide["number"]
     originals = bundle_path / "carousel" / "assets" / "fallback-originals"
@@ -149,7 +152,9 @@ def _fallback_candidate(bundle_path: Path, slide: Dict[str, Any], png: Path, asp
         shutil.copy2(png, keep)
     candidate = originals / f"carousel-{num:02d}.fallback.png"
     text_fallback.compose_exact_text(png, slide.get("exact_text", ""), slide.get("text_placement", ""), candidate)
-    structural = run_qa(candidate, expected_aspect_ratio=aspect_ratio)
+    structural = run_qa(candidate, expected_aspect_ratio=aspect_ratio,
+                         check_color=not bool(slide.get("uses_product_mockup_directly")),
+                         accent_color=accent_color)
     if not structural.approved:
         raise text_fallback.FallbackError(f"QA estructural del respaldo: {structural.reason}")
     return candidate
@@ -178,6 +183,7 @@ def strict_final_review(bundle_path: Path, regenerate_fn: Optional[Callable[[int
     manifest = _read_json(bundle_path / "carousel" / "manifest.json") or {}
     brief = _read_json(bundle_path / "brief.json") or {}
     aspect_ratio = manifest.get("aspect_ratio", "4:5")
+    accent_color = (brief.get("visual_dna", {}).get("slide_1_master_dna") or {}).get("accent_color")
     used = {e.get("id"): int(e.get("text_qa_retry_count") or 0) for e in manifest.get("carousel", [])}
     records: List[Dict[str, Any]] = []
     for slide in brief.get("slides", []):
@@ -199,7 +205,7 @@ def strict_final_review(bundle_path: Path, regenerate_fn: Optional[Callable[[int
 
         def try_fallback(tag: str) -> bool:
             try:
-                candidate = _fallback_candidate(bundle_path, slide, png, aspect_ratio, tag)
+                candidate = _fallback_candidate(bundle_path, slide, png, aspect_ratio, tag, accent_color)
             except Exception as exc:  # noqa: BLE001
                 record["actions"].append({"action": "respaldo", "ok": False,
                                           "error": f"{type(exc).__name__}: {exc}"})

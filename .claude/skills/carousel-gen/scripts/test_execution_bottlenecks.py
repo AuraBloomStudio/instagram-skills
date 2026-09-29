@@ -256,7 +256,7 @@ def test_4_text_qa_de_la_tanda_en_paralelo():
         intervals: List[tuple] = []
 
         def _slow_save_image_and_qa(carousel_dir_, slide_number, image_bytes, config, expected_text, critical_phrases=None, authorized_extra_tokens=None,
-                                    uses_product_mockup=False):
+                                    uses_product_mockup=False, accent_color=None):
             start = time.time()
             time.sleep(delay)
             end = time.time()
