@@ -385,8 +385,9 @@ una regla ESTRUCTURAL obligatoria de este bloque. Las reglas ESTRUCTURALES nunca
 pase lo que pase, sin importar el ADN del Slide 1: legibilidad del texto, máximo 2 familias
 tipográficas, Poppins obligatoria, máximo 2 colores de texto, jerarquía tipográfica de 3
 niveles, uso directo (sin reinventar) de cualquier mockup de producto proporcionado por el
-usuario, y la regla PERMANENTE de blanco y negro + realismo fotográfico documental del punto 2
-y el punto 3 — el Slide 1 ya NO decide si el carrusel es B&N o a color, eso es fijo.
+usuario, la regla PERMANENTE de blanco y negro + realismo fotográfico documental del punto 2
+y el punto 3 — el Slide 1 ya NO decide si el carrusel es B&N o a color, eso es fijo — y la
+regla PERMANENTE de texto sin efectos ni capas oscuras del punto 8.
 
 1. LUMINOSIDAD (coherente con el Slide 1, no forzada): la imagen no debe quedar oscura o
    subexpuesta SIN RAZÓN visual. Si el ADN maestro del Slide 1 indica un tratamiento oscuro
@@ -495,9 +496,30 @@ y el punto 3 — el Slide 1 ya NO decide si el carrusel es B&N o a color, eso es
    - NIVEL 3 (apoyo): tamaño menor, solo si el slide lo necesita.
    Nunca todos los textos del slide con el mismo tamaño/peso/importancia. Diseña para móvil:
    tamaño y contraste suficientes, márgenes seguros, interlineado adecuado, sin comprimir
-   texto en bloques pequeños e ilegibles. El texto es prioritario sobre el encuadre completo
-   de la fotografía — si hace falta oscurecer o recortar parcialmente la imagen para ganar
-   legibilidad, se hace; nunca se reduce el texto para que "quepa".
+   texto en bloques pequeños e ilegibles. Para ganar legibilidad, usa ÚNICAMENTE posición
+   (elige una zona limpia de la fotografía: pared, cielo, fondo desenfocado natural, espacio
+   vacío), tamaño de fuente (puede reducirse moderadamente si hace falta), interlineado y
+   ancho del bloque de texto — ver punto 8, NUNCA se oscurece ni se cubre la fotografía para
+   lograrlo.
+
+8. TEXTO SIN EFECTOS NI CAPAS OSCURAS — REGLA ESTRUCTURAL PERMANENTE, sin excepción
+   (vigente desde 2026-09-29): el texto se integra DIRECTAMENTE sobre la fotografía, nunca
+   sobre una capa creada para respaldarlo. La fotografía debe permanecer visible y limpia
+   en todo el slide.
+   PROHIBIDO sin excepción, en el texto o detrás de él:
+   ✗ Sombra de texto, text-shadow o drop shadow.
+   ✗ Glow, halo o resplandor.
+   ✗ Borde/outline/stroke alrededor de las letras.
+   ✗ Fondo negro, rectángulo, banda, caja o panel (opaco o semitransparente) detrás del texto.
+   ✗ Degradado oscuro o viñeta creada específicamente para hacer legible el texto.
+   ✗ Blur/desenfoque aplicado a la fotografía detrás del texto.
+   ✗ Oscurecer artificialmente la fotografía para aumentar el contraste del texto.
+   El texto tampoco puede tapar rostros, manos, objetos ni acciones importantes de la
+   escena, ni cubrir una parte excesiva de la fotografía — si el texto es largo, se busca
+   primero una mejor ubicación o composición (ver punto 7), nunca una capa oscura para
+   "resolver" la legibilidad. Esta regla aplica igual al respaldo determinista de texto
+   (Pillow/Poppins, ver text_fallback.py): dibuja el texto EXACTO directamente sobre la
+   fotografía, sin sombra, stroke, outline, glow, rectángulo, banda ni oscurecimiento.
 """
 
 
