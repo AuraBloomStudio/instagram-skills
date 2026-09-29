@@ -1,12 +1,17 @@
 """
-text_fallback.py - RESPALDO DETERMINISTA DE TEXTO de carousel-gen (2026-09-26).
+text_fallback.py - RESPALDO DETERMINISTA DE TEXTO de carousel-gen (2026-09-26, sin
+efectos de texto desde 2026-09-29 — ver "TEXTO SIN SOMBRAS NI CAPAS" en SKILL.md).
 
 Cuando un slide agoto sus 2 regeneraciones automaticas y Gemini sigue dibujando el texto
 mal (palabras faltantes, duplicadas, inventadas o ilegibles), NO se pregunta ni se detiene
-el carrusel: se conserva la ultima imagen visual generada como fondo, se cubre la zona
-del texto erroneo con un difuminado oscuro (mismo lenguaje del diseño aprobado: texto
-claro sobre zona oscura) y se compone encima el TEXTO EXACTO del slide con Pillow y la
-fuente Poppins Bold incluida en la skill (assets/fonts/, licencia SIL OFL 1.1).
+el carrusel: se conserva la ultima imagen visual generada como fondo y se compone encima
+el TEXTO EXACTO del slide con Pillow y la fuente Poppins Bold incluida en la skill
+(assets/fonts/, licencia SIL OFL 1.1) — DIRECTAMENTE sobre la fotografia, sin ningun
+efecto ni capa detras: NUNCA sombra, stroke/outline, glow, rectangulo, banda, fondo negro,
+degradado ni blur/oscurecimiento de la fotografia para "ganar contraste". La unica
+herramienta de legibilidad es la posicion (zona donde Gemini escribio el texto original,
+via OCR, o la zona por defecto de `text_placement`), el tamaño de fuente (se reduce
+moderadamente si hace falta) y el interlineado — nunca una capa artificial.
 
 El resultado pasa otra vez por el QA estructural y el Text QA. No llama a Gemini ni a
 ninguna API: es 100% local y reproducible.
@@ -16,14 +21,13 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageFont
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 FONT_PATH = SKILL_DIR / "assets" / "fonts" / "Poppins-Bold.ttf"
 
 _SIDE_MARGIN = 0.07        # margen lateral seguro (fraccion del ancho)
 _BAND_PAD = 0.045          # aire extra arriba/abajo de la zona de texto detectada
-_FADE = 0.05              # degradado suave FUERA de la zona cubierta
 _MAX_FONT = 0.060          # tamaño maximo de fuente (fraccion del ancho)
 _MIN_FONT = 0.030          # tamaño minimo legible en telefono
 _LINE_SPACING = 1.22
@@ -45,9 +49,10 @@ def _placement_region(text_placement: str, width: int, height: int) -> Tuple[int
 
 def _detect_text_band(img: Image.Image, text_placement: str) -> Optional[Tuple[int, int]]:
     """
-    Zona vertical del texto que Gemini dibujo (para taparla), via las cajas de palabras
-    de Tesseract (1 hilo, con tiempo maximo). Solo se consideran palabras en la mitad de
-    la imagen que indica text_placement, para no tapar la portada del mockup ni la foto.
+    Zona vertical donde Gemini dibujo su texto (para reutilizar esa misma posicion al
+    redibujar el texto correcto encima), via las cajas de palabras de Tesseract (1 hilo,
+    con tiempo maximo). Solo se consideran palabras en la mitad de la imagen que indica
+    text_placement, para no confundir la portada del mockup ni la foto con texto.
     Devuelve None si no hay OCR o no se detecta texto.
     """
     try:
@@ -121,6 +126,12 @@ def compose_exact_text(src: Path, exact_text: str, text_placement: str, out: Pat
     Compone el TEXTO EXACTO sobre la ultima imagen del slide y guarda el PNG en `out`.
     Devuelve un resumen (zona usada, tamaño de fuente, lineas). Lanza FallbackError si
     falta la fuente o la imagen.
+
+    Regla permanente (2026-09-29, ver SKILL.md "TEXTO SIN SOMBRAS NI CAPAS"): el texto se
+    dibuja DIRECTAMENTE sobre la fotografia — nunca se cubre, oscurece, difumina ni
+    desenfoca la zona detras del texto, y el texto en si nunca lleva sombra, stroke,
+    outline ni glow. La unica ayuda a la legibilidad es la posicion (zona detectada) y el
+    tamaño de fuente/interlineado.
     """
     if not Path(font_path).is_file():
         raise FallbackError(f"fuente no disponible: {font_path}")
@@ -155,34 +166,17 @@ def compose_exact_text(src: Path, exact_text: str, text_placement: str, out: Pat
         y1 = min(height, y0 + target)
         y0 = max(0, y1 - target)
 
-    # Tapar el texto erroneo: la zona [y0, y1] queda TOTALMENTE cubierta (difuminado +
-    # oscurecido) y el degradado suave queda FUERA de ella, para que no asomen restos del
-    # texto de Gemini por los bordes.
-    fade = max(1, int(height * _FADE))
-    by0, by1 = max(0, y0 - fade), min(height, y1 + fade)
-    band = img.crop((0, by0, width, by1)).filter(ImageFilter.GaussianBlur(radius=max(12, width // 40)))
-    band = ImageEnhance.Brightness(band).enhance(0.30)
-    mask = Image.new("L", band.size, 255)
-    mdraw = ImageDraw.Draw(mask)
-    top_fade, bottom_fade = y0 - by0, by1 - y1
-    for i in range(top_fade):
-        mdraw.line([(0, i), (band.width, i)], fill=int(255 * (i + 1) / top_fade))
-    for i in range(bottom_fade):
-        mdraw.line([(0, band.height - 1 - i), (band.width, band.height - 1 - i)],
-                   fill=int(255 * (i + 1) / bottom_fade))
-    img.paste(band, (0, by0), mask)
-
-    # Texto exacto centrado, blanco con sombra suave (legibilidad en telefono).
+    # Texto exacto centrado, blanco, dibujado DIRECTAMENTE sobre la fotografia — sin
+    # cubrir/oscurecer/difuminar la zona detras (regla permanente, ver docstring arriba) y
+    # sin sombra, stroke, outline ni glow en el propio texto.
     draw = ImageDraw.Draw(img)
     top = y0 + ((y1 - y0) - text_h) // 2
-    shadow = max(1, size // 18)
     for n, line in enumerate(lines):
         if not line:
             continue
         w = draw.textlength(line, font=font)
         x = (width - w) / 2
         y = top + n * line_h
-        draw.text((x + shadow, y + shadow), line, font=font, fill=(0, 0, 0))
         draw.text((x, y), line, font=font, fill=(255, 255, 255))
 
     out = Path(out)

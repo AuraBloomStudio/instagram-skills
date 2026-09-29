@@ -134,16 +134,18 @@ algo, y sugerir comandos como `--regenerate-slides` al final.
 3. **Generacion**: 10 slides, QA automatico, maximo 2 regeneraciones por slide.
 4. **RESPALDO DETERMINISTA DE TEXTO** (`scripts/text_fallback.py`, automatico): si tras
    las 2 regeneraciones un slide sigue con el texto mal, se conserva su ultima imagen
-   como fondo, se cubre la zona del texto erroneo con un difuminado oscuro y se compone
-   encima el TEXTO EXACTO con Pillow y Poppins Bold (`assets/fonts/`, SIL OFL 1.1),
-   respetando margenes y el mockup; se vuelve a pasar el QA (incluida la comprobacion de
-   monocromia, ver "QA VISUAL" — `check_color=False` solo si el slide usa mockup) y se
-   reemplaza el PNG (el original queda en `carousel/assets/fallback-originals/`). El
-   respaldo NUNCA toca la fotografia/escena de fondo, solo compone texto encima — por eso
-   la fotografia sigue siendo la misma en blanco y negro ya aprobada, sin introducir color
-   ni alterar su estetica natural. Si ni el respaldo puede ejecutarse, se registra en
-   `manifest.json` y `pipeline_result.json`, se conserva la mejor version y el proceso
-   termina, sin preguntar.
+   como fondo y se compone encima el TEXTO EXACTO con Pillow y Poppins Bold
+   (`assets/fonts/`, SIL OFL 1.1) DIRECTAMENTE sobre la fotografia, respetando margenes y
+   el mockup — sin sombra, stroke, glow, rectangulo, banda ni oscurecer/difuminar la
+   fotografia detras del texto (regla permanente, ver "TEXTO SIN SOMBRAS NI CAPAS" mas
+   abajo); se vuelve a pasar el QA (incluida la comprobacion de monocromia, ver "QA
+   VISUAL" — `check_color=False` solo si el slide usa mockup) y se reemplaza el PNG (el
+   original queda en `carousel/assets/fallback-originals/`). El respaldo NUNCA toca la
+   fotografia/escena de fondo, solo compone texto encima — por eso la fotografia sigue
+   siendo la misma en blanco y negro ya aprobada, sin introducir color ni alterar su
+   estetica natural. Si ni el respaldo puede ejecutarse, se registra en `manifest.json` y
+   `pipeline_result.json`, se conserva la mejor version y el proceso termina, sin
+   preguntar.
 4b. **REVISION FINAL ESTRICTA** (`scripts/strict_review.py`, automatica, en el cierre): el
    Text QA de la generacion es tolerante a proposito y puede aprobar errores visibles
    (palabra deformada como "necesisitaste", texto inventado como "no determes;", signos
@@ -821,9 +823,11 @@ textos de un slide con el mismo tamaño/peso/importancia.
 
 Diseñar siempre pensando en visualizacion desde telefono: tamaño suficiente, contraste
 suficiente, margenes seguros, interlineado adecuado, no comprimir demasiado texto, no
-generar bloques pequeños e ilegibles. El texto es prioritario: si hace falta recortar u
-oscurecer parcialmente la fotografia para ganar contraste y espacio de lectura, se hace —
-nunca se reduce el texto o su tamaño para "hacer caber" mas contenido.
+generar bloques pequeños e ilegibles. Para ganar contraste y espacio de lectura, usar
+UNICAMENTE: eleccion de una zona limpia de la fotografia (pared, cielo, fondo desenfocado
+natural, espacio vacio), tamaño de fuente (puede reducirse moderadamente si hace falta),
+interlineado y ancho del bloque de texto — ver "Texto sin sombras ni capas oscuras" abajo.
+NUNCA oscurecer ni recortar la fotografia para "ganar" espacio de lectura.
 
 **El Nivel 1 nunca autoriza mover ni duplicar texto (regla obligatoria, hallazgo real de
 produccion 2026-09-18)**: marcar una frase como Nivel 1 significa UNICAMENTE darle mayor
@@ -835,6 +839,51 @@ de `exact_text` (ver "FIDELIDAD DEL CONTENIDO ORIGINAL" arriba — el orden tamb
 contenido, no solo las palabras). `build_prompt_for_slide()` en `carousel_common.py`
 incluye ahora una regla explicita en el prompt contra esto — ver "COST OPTIMIZATION" ›
 "Prompt: nunca renderizar instrucciones, nunca mover/duplicar el Nivel 1".
+
+### Texto sin sombras ni capas oscuras
+
+**Regla ESTRUCTURAL PERMANENTE, sin excepción, vigente desde 2026-09-29.** El texto se
+integra DIRECTAMENTE sobre la fotografía, nunca sobre una capa creada para respaldarlo. La
+fotografía debe permanecer visible y limpia en todo el slide — el texto correcto (que pasa
+el Text QA) NO significa que el diseño sea correcto si además tiene alguno de estos
+efectos.
+
+**Prohibido sin excepción, en el texto o detrás de él:**
+- Sombra de texto, text-shadow o drop shadow.
+- Glow, halo o resplandor.
+- Borde/outline/stroke alrededor de las letras.
+- Fondo negro, rectángulo, caja, placa o panel (opaco o semitransparente) detrás del texto.
+- Degradado oscuro o viñeta creada específicamente para hacer legible el texto.
+- Blur/desenfoque aplicado a la fotografía detrás del texto.
+- Oscurecer artificialmente la fotografía para aumentar el contraste del texto.
+
+**Para lograr legibilidad, usar ÚNICAMENTE:**
+- posición (elegir una zona naturalmente limpia de la fotografía: pared, cielo, fondo
+  desenfocado natural, espacio vacío, zona de menor detalle);
+- tamaño de fuente (puede reducirse moderadamente si hace falta);
+- interlineado y ancho del bloque de texto;
+- márgenes seguros;
+- división de líneas visualmente equilibrada.
+
+El texto tampoco puede tapar rostros, manos, objetos ni acciones importantes de la escena,
+ni cubrir una parte excesiva de la fotografía ni convertirla en un fondo negro. Si el texto
+es largo, se busca primero una mejor ubicación o composición — nunca se soluciona
+agregando una capa oscura.
+
+**Referencia visual**: la referencia sigue teniendo prioridad para escena, emoción,
+composición, iluminación y lenguaje fotográfico — pero nunca se copia una sombra o fondo
+oscuro de texto de la referencia si contradice esta regla.
+
+**Regeneración**: si una imagen generada por Gemini tiene texto con sombra, glow, halo o
+una capa oscura detrás, se considera un fallo visual y se regenera automáticamente según
+las reglas normales de reintento (ver "Retries y QA") — nunca se acepta la imagen solo
+porque el OCR del texto sea correcto, y nunca se pregunta al usuario.
+
+**Respaldo determinista (Pillow/Poppins)**: esta regla aplica igual al fallback (ver PASO
+4/"RESPALDO DETERMINISTA DE TEXTO" arriba, `scripts/text_fallback.py`) — dibuja el texto
+EXACTO directamente sobre la fotografía, sin sombra, stroke, outline, glow, rectángulo,
+banda, fondo negro, degradado ni oscurecer/difuminar la fotografía. Si se necesita
+contraste, únicamente posición, tamaño, peso tipográfico e interlineado.
 
 ### Composicion — coherencia sin repeticion
 
@@ -853,8 +902,9 @@ Slide 1, **gana el ADN visual del Slide 1**. Excepcion: las reglas ESTRUCTURALES
 obligatorias de este sistema nunca se saltan, sin importar el ADN del Slide 1:
 legibilidad del texto, maximo 2 familias tipograficas, Poppins obligatoria, maximo 2
 colores de texto, jerarquia tipografica de 3 niveles, uso directo (sin reinventar) de
-cualquier mockup de producto proporcionado por el usuario, y el blanco y negro + realismo
-fotografico documental obligatorios de "Estilo fotografico permanente" arriba.
+cualquier mockup de producto proporcionado por el usuario, el blanco y negro + realismo
+fotografico documental obligatorios de "Estilo fotografico permanente" arriba, y el texto
+sin sombras ni capas oscuras de "Texto sin sombras ni capas oscuras" arriba.
 
 **Slide 1 (recreacion de la referencia viral) — condicion especial:** el Slide 1 conserva
 la identidad de la publicacion original: sujeto principal, expresion, elementos clave
@@ -2727,7 +2777,7 @@ FLOW_ENABLED=false                       # reservado, NUNCA usado por carousel-g
   seccion "Logos de herramientas" abajo); si se necesita, requiere Kie reactivado
   explicitamente o una implementacion Gemini equivalente en una migracion futura.
 
-## QA VISUAL (verificacion objetiva de la regla permanente de blanco y negro)
+## QA VISUAL (verificacion de las reglas permanentes de blanco y negro y texto sin efectos)
 
 **Regla obligatoria y permanente, vigente desde 2026-09-28.** Ademas de validar
 archivo/dimensiones/aspect ratio, `qa.run_qa()` verifica de forma 100% objetiva y
@@ -2755,8 +2805,21 @@ subjetivo (igual que la coherencia visual con el Slide 1, ver "Limitaciones" arr
 depende del prompt/modelo, no de una metrica de pixeles. Bloquear un carrusel por una
 diferencia subjetiva de "realismo" generaria falsos rechazos; el realismo fotografico se
 exige en el PROMPT (ver "Estilo fotografico permanente"), no en un QA automatico posterior.
-La unica comprobacion automatica de esta seccion es la de color, porque es la unica
-objetivamente medible.
+La comprobacion de color es objetivamente medible por pixel; la de texto sin efectos
+(siguiente parrafo) es objetivamente verificable por CODIGO en vez de por pixel.
+
+**Texto sin sombras ni capas oscuras (verificacion por codigo, no por pixel — vigente
+desde 2026-09-29):** a diferencia del color, "¿tiene el texto una sombra/glow/capa oscura?"
+no es una metrica de pixeles confiable (generaria falsos positivos/negativos constantes
+sobre fotografias reales con luces y sombras legitimas de la escena). Por eso esta regla
+(ver "Texto sin sombras ni capas oscuras" arriba) se verifica de la unica forma objetiva
+posible para este caso: revisando que el CODIGO DE COMPOSICION DE TEXTO
+(`text_fallback.compose_exact_text`, unico lugar donde este skill dibuja texto con Pillow)
+no contenga logica de sombra/stroke/outline/glow/overlay oscuro/panel/gradient/blur — si
+alguna vez aparece, se elimina del codigo. Para el texto que dibuja Gemini directamente en
+la imagen, la regla se exige en el PROMPT (`GLOBAL_DESIGN_RULES` punto 8) y se corrige por
+regeneracion cuando la revision (automatica u observada) detecte el efecto — nunca por un
+analisis de pixeles que podria bloquear imagenes buenas por sombras fotograficas legitimas.
 
 ## TEXT QA (verificacion local del texto realmente renderizado en cada imagen)
 
