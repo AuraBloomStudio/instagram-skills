@@ -136,10 +136,14 @@ algo, y sugerir comandos como `--regenerate-slides` al final.
    las 2 regeneraciones un slide sigue con el texto mal, se conserva su ultima imagen
    como fondo, se cubre la zona del texto erroneo con un difuminado oscuro y se compone
    encima el TEXTO EXACTO con Pillow y Poppins Bold (`assets/fonts/`, SIL OFL 1.1),
-   respetando margenes y el mockup; se vuelve a pasar el QA y se reemplaza el PNG (el
-   original queda en `carousel/assets/fallback-originals/`). Si ni el respaldo puede
-   ejecutarse, se registra en `manifest.json` y `pipeline_result.json`, se conserva la
-   mejor version y el proceso termina, sin preguntar.
+   respetando margenes y el mockup; se vuelve a pasar el QA (incluida la comprobacion de
+   monocromia, ver "QA VISUAL" — `check_color=False` solo si el slide usa mockup) y se
+   reemplaza el PNG (el original queda en `carousel/assets/fallback-originals/`). El
+   respaldo NUNCA toca la fotografia/escena de fondo, solo compone texto encima — por eso
+   la fotografia sigue siendo la misma en blanco y negro ya aprobada, sin introducir color
+   ni alterar su estetica natural. Si ni el respaldo puede ejecutarse, se registra en
+   `manifest.json` y `pipeline_result.json`, se conserva la mejor version y el proceso
+   termina, sin preguntar.
 4b. **REVISION FINAL ESTRICTA** (`scripts/strict_review.py`, automatica, en el cierre): el
    Text QA de la generacion es tolerante a proposito y puede aprobar errores visibles
    (palabra deformada como "necesisitaste", texto inventado como "no determes;", signos
@@ -609,8 +613,12 @@ llamado a la accion), aplica SIEMPRE:
 
 Estas reglas son un SISTEMA DE DISEÑO fijo del skill — se aplican SIEMPRE, en cada
 ejecucion. Nunca se documentan ni se aplican como "una eleccion mas" — son restricciones
-obligatorias del sistema. Pero dentro de ese sistema, el ADN visual real del Slide 1 (no
-un default generico) es quien decide el tratamiento de imagen, color y luminosidad — ver
+obligatorias del sistema. El tratamiento de COLOR ya no es una decision del Slide 1: desde
+2026-09-28, blanco y negro + realismo fotografico documental (ver "Estilo fotografico
+permanente" mas abajo) es una regla ESTRUCTURAL fija, igual que Poppins. Lo que SI sigue
+decidiendo el ADN real del Slide 1 (no un default generico) es la luminosidad, el
+contraste, el grano, la composicion y el resto del lenguaje visual dentro de ese blanco y
+negro — ver
 "Slide 1 = ancla visual maestra" abajo.
 
 ### Slide 1 = ancla visual maestra (cadena obligatoria)
@@ -631,59 +639,114 @@ y en solitario; su imagen resultante se usa como `image_input` adicional (ancla 
 real, no solo texto) para generar todos los slides 2+ en paralelo. Los slides 2+ NUNCA se
 diseñan de forma independiente — deben sentirse una evolucion natural del mismo carrusel.
 
-**Que se hereda del Slide 1 (obligatorio):** tratamiento fotografico (B&N, color, o
-ilustrado — ver siguiente seccion), temperatura de color, contraste, exposicion,
-saturacion, profundidad de negros, luminosidad, grano/textura, tratamiento de piel y
-sombras, realismo fotografico, y atmosfera emocional.
+**Que se hereda del Slide 1 (obligatorio):** contraste, exposicion, profundidad de negros,
+luminosidad, grano/textura, tratamiento de piel y sombras, realismo fotografico, y
+atmosfera emocional — siempre dentro del blanco y negro obligatorio (ver "Estilo
+fotografico permanente" mas abajo; el tratamiento de imagen ya no es B&N/color/ilustrado a
+eleccion del Slide 1, es B&N fijo salvo la unica excepcion de referencia ilustrada).
 
 **Que NO se copia del Slide 1 (obligatorio variar):** la escena exacta, el sujeto, la
 pose ni la composicion. Cada slide 2+ evoluciona la composicion segun su rol narrativo —
 mismo lenguaje visual, escenas y composiciones nuevas. Nunca 9 variaciones identicas de
 la misma foto.
 
-### Tratamiento de imagen y color — lo determina el Slide 1, NUNCA un default
+### Estilo fotografico permanente — blanco y negro documental, fotografia real (no IA)
 
-El sistema NO impone blanco y negro por defecto a todos los carruseles, ni fuerza color
-si el Slide 1 es B&N. Tras analizar la referencia y construir el Slide 1, hay que
-identificar cual de estos tratamientos usa realmente:
+**Regla ESTRUCTURAL PERMANENTE, vigente desde 2026-09-28, aplica a TODOS los carruseles
+futuros sin excepcion y sin volver a preguntarse en cada ejecucion.** Reemplaza la version
+anterior de esta seccion, en la que el tratamiento de imagen (B&N/color/ilustrado) lo
+decidia el ADN del Slide 1 caso por caso. Ya no es asi: el tratamiento de color es fijo.
 
-- fotografia B&N pura
-- B&N con uno o varios acentos de color
-- fotografia a color
-- color desaturado
-- color cinematografico (calido o frio)
-- otra combinacion cromatica claramente identificable
-- lenguaje ilustrado/grafico (solo si la referencia y el Slide 1 son ellos mismos
-  ilustrados — en ese caso, los slides 2+ siguen ese lenguaje, no fotografia realista)
+**1. Regla de color — blanco y negro obligatorio:**
+Toda fotografia generada por este skill es SIEMPRE:
+- blanco y negro / escala de grises neutra, de principio a fin del carrusel;
+- sin colorizacion selectiva (nunca un objeto en color sobre fondo B&N);
+- sin filtro sepia ni ningun viraje de color sobre la escala de grises;
+- sin dominante azul, verde, marron, naranja o amarilla.
 
-Los slides 2+ usan una ADAPTACION COHERENTE de ese mismo tratamiento — nunca uno
-distinto. Ejemplo: si el Slide 1 es B&N + amarillo como acento, todos los slides 2+
-mantienen B&N + amarillo. Si el Slide 1 es color calido, los slides 2+ usan color calido
-compatible — nunca convertir a B&N "porque la referencia es editorial".
+Esto aplica aunque la imagen de referencia viral sea a color: de la referencia se toma el
+sujeto, la pose, la composicion, la emocion y el ADN fotografico — nunca su color. Ya NO
+existe la opcion de "B&N con acento de color", "color desaturado" o "color cinematografico"
+como tratamiento del Slide 1 — eso quedaba en la version anterior de esta regla.
 
-### Realismo fotografico
+**Esta regla es SOLO sobre la fotografia — NO convertir a B&N:**
+- el texto ni la tipografia superpuestos (colores segun "Paleta de texto" mas abajo);
+- los elementos graficos del diseño (barra de progreso, iconos, flechas, etc.);
+- el mockup oficial de producto aprobado (EL DOLOR QUE NO TE PERTENECE): se reproduce
+  EXACTAMENTE con sus colores originales, sin excepcion — ver "CONFIGURACIÓN FIJA" y la
+  instruccion de rol "mockup" en `carousel_common.IMAGE_ROLE_INSTRUCTIONS`.
 
-Cuando el Slide 1 esta construido a partir de fotografia realista, los slides 2+ deben
-ser fotografia hiperrealista y de apariencia profesional: personas anatomicamente
-correctas, piel y cabello naturales, iluminacion fotografica real, profundidad de campo
-realista, texturas naturales, expresiones humanas creibles, composicion editorial.
+El color de acento del texto (ver "Paleta de texto" mas abajo) se sigue derivando del ADN
+visual de la referencia original aunque la fotografia final sea B&N — sigue siendo un
+color de TEXTO, nunca de la fotografia.
 
-NUNCA: ilustracion, pintura, render 3D, imagen de stock artificial, aspecto plastico o
-arte digital evidente. Excepcion unica: que el Slide 1 y la referencia sean ellos mismos
-claramente ilustrados o graficos — ahi los slides 2+ siguen ese lenguaje.
+**2. Regla principal — realismo fotografico, nunca aspecto de IA:**
+La prioridad visual es FOTOGRAFIA REAL por encima de la perfeccion estetica. Priorizar
+fotografia documental, editorial, de autor, lifestyle real, espontanea: momentos humanos
+autenticos, imperfecciones naturales, composicion fotografica creible, iluminacion fisica
+real, profundidad de campo natural, textura real de piel y cabello, ropa con pliegues
+naturales, ambientes y objetos fisicamente plausibles.
 
-Regla general: **el tipo de imagen del Slide 1 determina el tipo de imagen de los slides
-2+.**
+**3. Eliminar la apariencia "IA" — evitar deliberadamente:** piel excesivamente perfecta o
+plastica, rostros demasiado simetricos, ojos artificialmente perfectos, dientes perfectos
+y uniformes, manos "perfectas" de forma antinatural o dedos deformados, cabello
+excesivamente definido o plastico, iluminacion cinematografica exagerada, piel de
+porcelana, cuerpos excesivamente estilizados, modelos de aspecto stock, poses demasiado
+perfectas, composicion excesivamente limpia, escenarios genericos de IA, fondos
+artificialmente desenfocados, bokeh exagerado, HDR, contraste excesivo, nitidez artificial,
+glow, piel suavizada digitalmente, estetica "luxury AI" o de publicidad generada por IA. El
+objetivo NUNCA es una imagen "perfecta" — es una imagen que parezca HABER SIDO FOTOGRAFIADA.
+
+**4. Imperfecciones fotograficas naturales** (introducir cuando sean apropiadas a la
+escena, como caracteristicas normales de una foto real, nunca como defectos visibles):
+pequeñas variaciones de expresion, postura corporal natural, imperfecciones sutiles de
+piel, cabello ligeramente desordenado, ropa con arrugas naturales, iluminacion desigual
+pero fisicamente coherente, grano fotografico sutil, pequeñas variaciones de foco,
+encuadres ligeramente imperfectos, gestos espontaneos, lenguaje corporal no posado.
+
+**5. Iluminacion:** priorizar luz natural de ventana, luz ambiental, luz exterior natural,
+luz suave real, sombras naturales, contraste fotografico realista. Evitar iluminacion
+cinematografica exagerada, halos, rim light artificial, glow, iluminacion imposible o
+multiples fuentes de luz contradictorias. La luz debe parecer provenir de una fuente fisica
+existente en la escena.
+
+**6. Lenguaje fotografico en los prompts:** describir la escena como una FOTOGRAFIA, no
+como una ilustracion — documentary photography, candid photograph, editorial photography,
+authentic human moment, natural available light, realistic skin texture, subtle film
+grain, natural imperfections, realistic depth of field, unposed moment, physically
+plausible lighting, authentic environment. No abusar de parametros de camara solo para
+parecer "profesional" — la prioridad sigue siendo el realismo, no la produccion de estudio.
+
+**7. Evitar estetica de stock:** las personas no deben parecer modelos posando para una
+publicidad. Preferir personas comunes, expresiones contenidas, gestos naturales, momentos
+intimos, escenas cotidianas, interaccion espontanea, lenguaje corporal imperfecto — la
+escena debe parecer capturada por un fotografo documental/editorial, no diseñada por un
+banco de imagenes.
+
+**8. Referencia visual:** la imagen de referencia (y el Slide 1 como ancla para los
+slides 2+) sigue siendo la guia principal de composicion, concepto, emocion, relacion
+entre personajes, encuadre, ambiente y momento narrativo — nunca se copia literalmente,
+siempre se crea una fotografia nueva y original dentro de ese mismo lenguaje.
+
+**Excepcion unica a TODO este bloque:** si la referencia viral y el Slide 1 son ellos
+mismos explicitamente ilustrados o graficos (no fotografia), los slides 2+ siguen ese
+mismo lenguaje ilustrado — pero el punto 1 (blanco y negro) sigue aplicando igual sobre esa
+ilustracion, salvo el texto, los graficos de diseño y el mockup (ver excepciones arriba).
+
+**Criterio final:** el estandar visual permanente de carousel-gen es "FOTOGRAFIA DOCUMENTAL
+EN BLANCO Y NEGRO, HUMANA, NATURAL, IMPERFECTA Y CREIBLE" — nunca "imagen bonita generada
+por IA en blanco y negro". La primera impresion al mirar el slide debe ser "esto parece una
+fotografia real", nunca "esto parece una imagen de IA".
 
 ### Continuidad real de tonos (no solo paleta nominal)
 
-No basta con usar la misma paleta nominal. Debe existir continuidad real en: temperatura
-de color, contraste, exposicion, saturacion, profundidad de negros, luminosidad, textura,
-tratamiento de piel, tratamiento de sombras y luces, ambiente, grano y sensacion
-fotografica general. Los slides 2+ deben parecer fotografias tomadas dentro de la MISMA
-direccion artistica que el Slide 1 — nunca un slide B&N editorial seguido de un slide a
-color tipo stock, ni un slide calido, otro frio, otro sepia y otro B&N sin una razon
-visual que venga del propio Slide 1.
+No basta con usar la misma paleta nominal. Dentro de la escala de grises obligatoria de
+arriba, debe existir continuidad real en: contraste, exposicion, profundidad de negros,
+luminosidad, textura, tratamiento de piel, tratamiento de sombras y luces, ambiente, grano
+y sensacion fotografica general. Los slides 2+ deben parecer fotografias en blanco y negro
+tomadas dentro de la MISMA direccion artistica que el Slide 1 — nunca una mezcla de
+tratamientos (uno mas contrastado, otro mas plano, uno con grano marcado y otro sin grano,
+sin que eso venga del propio Slide 1).
 
 ### Luminosidad — coherente con el Slide 1, nunca forzada
 
@@ -789,14 +852,18 @@ Cuando exista conflicto entre una instruccion generica de estilo y el ADN visual
 Slide 1, **gana el ADN visual del Slide 1**. Excepcion: las reglas ESTRUCTURALES
 obligatorias de este sistema nunca se saltan, sin importar el ADN del Slide 1:
 legibilidad del texto, maximo 2 familias tipograficas, Poppins obligatoria, maximo 2
-colores de texto, jerarquia tipografica de 3 niveles, y uso directo (sin reinventar) de
-cualquier mockup de producto proporcionado por el usuario.
+colores de texto, jerarquia tipografica de 3 niveles, uso directo (sin reinventar) de
+cualquier mockup de producto proporcionado por el usuario, y el blanco y negro + realismo
+fotografico documental obligatorios de "Estilo fotografico permanente" arriba.
 
 **Slide 1 (recreacion de la referencia viral) — condicion especial:** el Slide 1 conserva
 la identidad de la publicacion original: sujeto principal, expresion, elementos clave
-(ej. una flor), esencia emocional, tratamiento fotografico y composicion esencial, y el
-hook/texto exacto aprobado — nunca se sustituye, resume, reinterpreta o reemplaza ese
-texto. Lo unico que se puede adaptar es el FONDO (mas luz, menos vignette, mayor rango
+(ej. una flor), esencia emocional y composicion esencial, y el hook/texto exacto aprobado
+— nunca se sustituye, resume, reinterpreta o reemplaza ese texto. El TRATAMIENTO
+FOTOGRAFICO es la unica excepcion que NO se conserva literalmente de la publicacion
+original si esta era a color: el Slide 1 se genera siempre en blanco y negro (ver "Estilo
+fotografico permanente"), tomando de la referencia el sujeto y la composicion, nunca su
+color. Lo unico mas que se puede adaptar es el FONDO (mas luz, menos vignette, mayor rango
 tonal) para armonizar con la luminosidad del resto del carrusel, siempre de forma sutil y
 sin alterar al sujeto, la expresion, los elementos clave ni el hook.
 
@@ -971,16 +1038,16 @@ maestra" arriba):
     "resumen": "Resumen breve del ADN visual observado en la referencia viral CRUDA, antes de adaptarla al Slide 1 (tratamiento fotografico, paleta, composicion tal como aparecen en el post original)"
   },
   "slide_1_master_dna": {
-    "image_treatment": "b&n_puro | b&n_con_acento | color | color_desaturado | color_calido | color_frio | ilustrado — la categoria real que tendra el Slide 1, nunca un default",
-    "color_treatment": "Descripcion concreta del tratamiento cromatico que tendra el Slide 1 (ej. 'blanco y negro editorial con un unico acento amarillo dorado')",
-    "dominant_tones": ["...", "..."],
-    "accent_color": "Codigo hex o descripcion precisa del color de acento (blanco + este color son los UNICOS 2 colores de texto de todo el carrusel)",
-    "accent_color_source": "De donde sale ese accent_color (normalmente: 'derivado del ADN visual del Slide 1'; solo se fija a un slide especifico si el usuario lo pide explicitamente para ese carrusel)",
+    "image_treatment": "b&n_puro (fijo y obligatorio — ver 'Estilo fotografico permanente'; unica excepcion: 'ilustrado' si la referencia y el Slide 1 son ellos mismos explicitamente ilustrados, y en ese caso tambien en escala de grises)",
+    "color_treatment": "Descripcion concreta del tratamiento en blanco y negro que tendra el Slide 1 (ej. 'blanco y negro documental, contraste medio-alto, negros profundos, grano sutil') — nunca describir un tratamiento a color, sepia o sesgado de tono",
+    "dominant_tones": ["tonos de grises/blancos/negros dominantes observados o planeados, ej. 'grises medios', 'negros profundos', 'blancos calidos' — nunca nombres de colores"],
+    "accent_color": "Codigo hex o descripcion precisa del color de acento (blanco + este color son los UNICOS 2 colores de texto de todo el carrusel) — se deriva del ADN de COLOR de `source_reference_dna` (la referencia cruda), ya que la fotografia del Slide 1 en si es B&N y no aporta color propio",
+    "accent_color_source": "De donde sale ese accent_color (normalmente: 'derivado del color dominante/emocional de la referencia viral original, aplicado como acento de texto sobre un Slide 1 en blanco y negro'; solo se fija a un slide especifico si el usuario lo pide explicitamente para ese carrusel)",
     "contrast_profile": "...",
     "luminosity_profile": "Luminosidad coherente con el Slide 1 (ver regla de Luminosidad arriba) — nunca 'siempre claro' ni 'siempre oscuro' por defecto",
-    "photographic_realism": "Si el Slide 1 es foto real: descripcion del nivel de realismo esperado (hiperrealista, profesional, anatomicamente correcto...). Si es ilustrado: describir ese lenguaje en su lugar",
+    "photographic_realism": "Descripcion del nivel de realismo documental esperado (ver 'Estilo fotografico permanente'): imperfecciones naturales, textura de piel real, luz natural, nada de aspecto IA/CGI/plastico. Si la referencia es ilustrada: describir ese lenguaje ilustrado en su lugar (igual en blanco y negro)",
     "texture_profile": "Grano/textura esperados, consistentes en todos los slides",
-    "continuity_rules": "Recordatorio operativo de que TODO esto lo heredan los slides 2+ adaptando composicion/escena, nunca el tratamiento visual — y que el ADN del Slide 1 tiene prioridad sobre instrucciones genericas (excepto las reglas estructurales: legibilidad, 2 familias tipograficas, Poppins obligatoria, 2 colores de texto, jerarquia, mockups directos)"
+    "continuity_rules": "Recordatorio operativo de que TODO esto lo heredan los slides 2+ adaptando composicion/escena, nunca el tratamiento visual — el ADN del Slide 1 tiene prioridad sobre instrucciones genericas (excepto las reglas estructurales: legibilidad, 2 familias tipograficas, Poppins obligatoria, 2 colores de texto, jerarquia, mockups directos, y blanco y negro + realismo documental obligatorios)"
   },
   "paleta_colores": { "dominantes": ["..."], "acentos": ["..."], "fondo": "..." },
   "tipografia": { "tratamiento": "...", "peso": "...", "estilo": "..." },
@@ -2660,6 +2727,37 @@ FLOW_ENABLED=false                       # reservado, NUNCA usado por carousel-g
   seccion "Logos de herramientas" abajo); si se necesita, requiere Kie reactivado
   explicitamente o una implementacion Gemini equivalente en una migracion futura.
 
+## QA VISUAL (verificacion objetiva de la regla permanente de blanco y negro)
+
+**Regla obligatoria y permanente, vigente desde 2026-09-28.** Ademas de validar
+archivo/dimensiones/aspect ratio, `qa.run_qa()` verifica de forma 100% objetiva y
+determinista (sin llamar a ningun modelo, sin criterio subjetivo) que cada fotografia
+cumpla la regla de "Estilo fotografico permanente" (blanco y negro obligatorio, ver mas
+arriba): `qa.check_monochrome()` reduce la imagen a una version pequeña y mide, por pixel,
+la diferencia maxima entre sus canales R/G/B. Si mas del 2% de los pixeles muestreados
+tiene color visible (diferencia > 14 sobre 255 — tolera ruido de compresion en una foto
+B&N real), la imagen queda RECHAZADA con el motivo `"Imagen con color visible..."`.
+
+**Que pasa cuando falla:** un rechazo por color visible sigue exactamente el mismo camino
+que cualquier otro fallo de QA estructural (ver "Retries y QA" arriba) — se regenera
+automaticamente ese slide dentro del presupuesto normal de reintentos, sin preguntar al
+usuario y sin ningun tratamiento especial. Nunca se le pregunta al usuario si quiere
+conservar una imagen con color.
+
+**Cuando se omite (a proposito):** slides con `uses_product_mockup_directly=true` pasan
+`check_color=False` a `run_qa()` — el mockup oficial de producto conserva sus colores
+originales por regla explicita (ver "Estilo fotografico permanente" arriba) y NUNCA debe
+marcarse como fallo por tener color.
+
+**Que NO intenta verificar este QA (a proposito, evita bloqueos injustos):** no hay ningun
+analisis automatico de "se ve como IA" o "es lo bastante realista" — eso es inherentemente
+subjetivo (igual que la coherencia visual con el Slide 1, ver "Limitaciones" arriba) y
+depende del prompt/modelo, no de una metrica de pixeles. Bloquear un carrusel por una
+diferencia subjetiva de "realismo" generaria falsos rechazos; el realismo fotografico se
+exige en el PROMPT (ver "Estilo fotografico permanente"), no en un QA automatico posterior.
+La unica comprobacion automatica de esta seccion es la de color, porque es la unica
+objetivamente medible.
+
 ## TEXT QA (verificacion local del texto realmente renderizado en cada imagen)
 
 **Regla obligatoria y permanente, aplica automaticamente a TODOS los carruseles futuros.**
@@ -2679,7 +2777,7 @@ SOURCE_TEXT
   -> brief.json
   -> GEMINI (Direct/Batch)
   -> imagen generada
-  -> QA ESTRUCTURAL (qa.py: archivo/dimensiones/4:5)
+  -> QA ESTRUCTURAL (qa.py: archivo/dimensiones/4:5 + monocromia B&N obligatoria)
   -> TEXT QA (text_qa.py: OCR local + comparacion contra exact_text)
        |
        +-- OK -> TEXT_QA_APPROVED
